@@ -1,0 +1,131 @@
+&i2c2 {
+        clock-frequency = <400000>;
+        aw883xx_smartpa_0: aw883xx_smartpa@34 {
+                compatible = "awinic,aw883xx_smartpa";
+                #sound-dai-cells = <0>;
+                reg = <0x34>;
+                reset-gpio = <&pio 86 0>;
+                //irq-gpio = <&pio 37 0x0>;
+                sync-load = <1>;
+                sound-channel = <0>;
+                re-min = <1000>;
+                re-max= <40000>;
+                cali-seq-num = <2>;
+                cali-seq-index = <0>;
+                status = "okay";
+        };
+        aw883xx_smartpa_1: aw883xx_smartpa@35 {
+                compatible = "awinic,aw883xx_smartpa";
+                #sound-dai-cells = <0>;
+                reg = <0x35>;
+                reset-gpio = <&pio 87 0>;
+                //irq-gpio = <&pio 37 0x0>;
+                sync-load = <1>;
+                sound-channel = <1>;
+                re-min = <1000>;
+                re-max= <40000>;
+                cali-seq-num = <2>;
+                cali-seq-index = <0>;
+                status = "okay";
+        };
+        aw883xx_smartpa_2: aw883xx_smartpa@36 {
+                compatible = "awinic,aw883xx_smartpa";
+                #sound-dai-cells = <0>;
+                reg = <0x36>;
+                reset-gpio = <&pio 88 0>;
+                //irq-gpio = <&pio 37 0x0>;
+                sync-load = <1>;
+                sound-channel = <2>;
+                re-min = <1000>;
+                re-max= <40000>;
+                cali-seq-num = <2>;
+                cali-seq-index = <0>;
+                status = "okay";
+        };
+        aw883xx_smartpa_3: aw883xx_smartpa@37 {
+                compatible = "awinic,aw883xx_smartpa";
+                #sound-dai-cells = <0>;
+                reg = <0x37>;
+                reset-gpio = <&pio 89 0>;
+                //irq-gpio = <&pio 37 0x0>;
+                sync-load = <1>;
+                sound-channel = <3>;
+                re-min = <1000>;
+                re-max= <40000>;
+                cali-seq-num = <2>;
+                cali-seq-index = <1>;
+                status = "okay";
+        };
+
+};
+
+&i2c6 {
+        clock-frequency = <400000>;
+        aw883xx_smartpa_4: aw883xx_smartpa@34 {
+                compatible = "awinic,aw883xx_smartpa";
+                #sound-dai-cells = <0>;
+                reg = <0x34>;
+                reset-gpio = <&pio 90 0>;
+                //irq-gpio = <&pio 37 0x0>;
+                sync-load = <1>;
+                sound-channel = <4>;
+                re-min = <1000>;
+                re-max= <40000>;
+                cali-seq-num = <2>;
+                cali-seq-index = <1>;
+                status = "okay";
+        };
+        aw883xx_smartpa_5: aw883xx_smartpa@35 {
+                compatible = "awinic,aw883xx_smartpa";
+                #sound-dai-cells = <0>;
+                reg = <0x35>;
+                reset-gpio = <&pio 91 0>;
+                //irq-gpio = <&pio 37 0x0>;
+                sync-load = <1>;
+                sound-channel = <5>;
+                re-min = <1000>;
+                re-max= <40000>;
+                cali-seq-num = <2>;
+                cali-seq-index = <1>;
+                status = "okay";
+        };
+        aw883xx_smartpa_6: aw883xx_smartpa@36 {
+                compatible = "awinic,aw883xx_smartpa";
+                #sound-dai-cells = <0>;
+                reg = <0x36>;
+                reset-gpio = <&pio 92 0>;
+                //irq-gpio = <&pio 37 0x0>;
+                sync-load = <1>;
+                sound-channel = <6>;
+                re-min = <1000>;
+                re-max= <40000>;
+                cali-seq-num = <2>;
+                cali-seq-index = <1>;
+                status = "okay";
+        };
+        aw883xx_smartpa_7: aw883xx_smartpa@37 {
+                compatible = "awinic,aw883xx_smartpa";
+                #sound-dai-cells = <0>;
+                reg = <0x37>;
+                reset-gpio = <&pio 93 0>;
+                //irq-gpio = <&pio 37 0x0>;
+                sync-load = <1>;
+                sound-channel = <7>;
+                re-min = <1000>;
+                re-max= <40000>;
+                cali-seq-num = <2>;
+                cali-seq-index = <0>;
+                status = "okay";
+        };
+
+};
+&sound {
+        spkid0-gpio = <&pio 101 0>;
+        spkid1-gpio = <&pio 102 0>;
+        spkid2-gpio = <&pio 103 0>;
+        spkid3-gpio = <&pio 104 0>;
+        mediatek,speaker-codec {
+                sound-dai = <&aw883xx_smartpa_0 &aw883xx_smartpa_1 &aw883xx_smartpa_2 &aw883xx_smartpa_3
+                             &aw883xx_smartpa_4 &aw883xx_smartpa_5 &aw883xx_smartpa_6 &aw883xx_smartpa_7>;
+        };
+};

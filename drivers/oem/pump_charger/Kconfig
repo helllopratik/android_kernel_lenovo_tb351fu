@@ -1,0 +1,12 @@
+config CHARGER_HL7139
+        tristate "Charger Driver for Halomicro HL7139 Charger IC"
+        help
+          Say Yes to enable Halomicro HL7139 driver.
+          It is mainly used as cap divider charger
+          for Mediatek platform
+
+config CHARGER_SC854X
+        tristate "SC8545-SC8549 Charger Pump driver"
+        help
+          If you say yes here you will get support for the SC8545-SC8549 Charge Pump.
+          This driver can give support for SC8545-SC8549 Interface.

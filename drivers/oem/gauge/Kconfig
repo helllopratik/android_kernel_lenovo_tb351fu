@@ -1,0 +1,4 @@
+config GAUGE_MM8XXX
+	tristate "Gauge dirver for mitsumi MM8XXX gauge IC"
+	help
+	Say Yes to enable Mistsumi MM8XXX driver.

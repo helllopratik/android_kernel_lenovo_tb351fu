@@ -1,0 +1,8 @@
+config CHARGER_COOLER_LCDOFF
+        tristate "charger cooler driver when lcd off "
+        help
+          Say Y to enable support for the lcd off charger cooler . 
+          when enable  this charger cooler, the MTK orginal charger cooler will only active when lcd on.
+          And this lcd off charger cooler will active when lcd off instead. 
+
+     

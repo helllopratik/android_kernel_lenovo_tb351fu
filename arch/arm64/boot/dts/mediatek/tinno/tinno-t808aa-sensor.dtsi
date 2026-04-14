@@ -1,0 +1,16 @@
+&i2c3 {
+    status = "okay";
+    clock-frequency = <400000>;
+    awinic_sar@12 {
+        compatible = "awinic,aw_sar";
+        reg = <0x12>;
+        sar-num = < 0 >;
+        interrupt-parent = < &pio >;
+        interrupts = <5 0>;
+        irq-gpio = <&pio 5 0>;
+        channel_use_flag = <0xff>;
+        aw_sar,use_plug_cail;
+        aw_sar,update_fw;
+        status = "okay";
+    };
+};

@@ -1,0 +1,296 @@
+#include <dt-bindings/iio/mt635x-auxadc.h>
+
+&i2c5 {
+	clock-frequency = <400000>;
+
+	sc8989x_chg: chg@6A {
+		compatible = "southchip,sc89890h";
+		reg = <0x6A>;
+		status = "okay";
+		eint_name = "chr_stat";
+		sc,intr-gpio = <&pio 4 IRQ_TYPE_EDGE_FALLING>;
+		charger_name = "primary_chg";
+		io-channels = <&pmic_auxadc AUXADC_VCDT>;
+		io-channel-names = "pmic_vbus";
+		sc,sc8989x,ico-en = <0>;
+		sc,sc8989x,hvdcp-en = <1>;
+		sc,sc8989x,auto-dpdm-en = <0>;
+		sc,sc8989x,vsys-min = <5>; /*3500mV*/
+		sc,sc8989x,vbatmin-sel = <0>; /*0:2.9V 1:2.5V*/
+		sc,sc8989x,itrick = <3>; /*60 + val *60*/
+		sc,sc8989x,iterm = <8>; /*30 + val * 60*/
+		sc,sc8989x,vbat-cv = <40>; /*3840 + val * 16*/
+		sc,sc8989x,vbat-low = <1>; /*0:2.8V 1:3V*/
+		sc,sc8989x,vrechg = <1>; /*0:100mV 1:200mV*/
+		sc,sc8989x,en-term = <1>;
+		sc,sc8989x,stat-dis = <0>;
+		sc,sc8989x,wd-time = <0>; /*0:Dis 1:40s 2:80s 3:160s*/
+		sc,sc8989x,en-timer = <1>;
+		sc,sc8989x,charge-timer = <2>; /*0:5h 1:8h 2:12h 3:20h*/
+		sc,sc8989x,bat-comp = <0>; /*val * 20*/
+		sc,sc8989x,vclamp = <0>; /*val *32*/
+		sc,sc8989x,votg = <12>; /*3900 + val * 100*/
+		sc,sc8989x,iboost = <7>; /*0:0.5A 3:1.4A 5:1.875A 7:2.45A*/
+		sc,sc8989x,force_vindpm = <0>;
+		sc,sc8989x,vindpm = <21>; /*2600 + val * 100*/
+	};
+
+	hl7015db_chg: chg@6B {
+		compatible = "mtk,hl7015";
+		reg = <0x6B>;
+		status = "okay";
+		irq-gpio = <&pio 4 IRQ_TYPE_EDGE_FALLING>;
+		chg-en-gpio = <&pio 150 IRQ_TYPE_EDGE_FALLING>;
+		io-channels = <&pmic_auxadc AUXADC_VCDT>;
+		io-channel-names = "pmic_vbus";
+		chg-name = "primary_chg";
+	};
+};
+
+&i2c0 {
+	clock-frequency = <1000000>;
+
+	aw35615@22 {
+		compatible = "awinic,aw35615";
+		reg = <0x22>;
+		status = "okay";
+		awinic,int_n = <&pio 6 1>;
+		aw35615,snk_pdo_size = <1>; /* set sink pdo num*/
+		aw35615,snk_pdo_vol = <5000>; /* set sink pdo voltage mV*/
+		aw35615,snk_pdo_cur = <2000>; /* set sink pdo current mA*/
+		aw35615,src_pdo_size = <1>; /* set source pdo num*/
+		aw35615,src_pdo_vol = <5000>; /* set source pdo voltage mV*/
+		aw35615,src_pdo_cur = <1000>; /* set source pdo current mA*/
+		aw35615,snk_tog_time = <0x38>; /* set toggle sink time */
+		aw35615,src_tog_time = <0x24>; /* set toggle source time */
+	};
+
+	cps8851_typec: cps8851@4e {
+		compatible = "cps,cps8851";
+		reg = <0x4e>;
+		status = "okay";
+		rt-tcpc,name = "type_c_port0"; /* tcpc_device's name */
+		rt1711pd,intr_gpio = <&pio 6 0x0>;
+		rt1711pd,intr_gpio_num = <6>;
+		rt-tcpc,role_def = <5>; /* 0: Unknown, 1: SNK, 2: SRC, 3: DRP, 4: Try.SRC, 5: Try.SNK */
+		rt-tcpc,rp_level = <0>; /* 0: Default, 1: 1.5, 2: 3.0 */
+		rt-tcpc,vconn_supply  = <3>;  /* 0: Never, 1: Always, 2: EMarkOnly, 3: StartOnly */
+	};
+};
+
+&i2c7 {
+	clock-frequency = <400000>;
+
+	hl7139_pumpchg@5F {
+		compatible = "Halomicro,HL7139";
+		reg = <0x5F>;
+		intr-gpios = <&pio 1 0x0>;
+		status = "okay";
+		rm_name = "primary_dvchg";
+	};
+
+	southchip_chg@6A{
+		compatible = "sc,sc854x-master", "southchip,sc89890h";
+		reg = <0x6A>;
+		io-channels = <&pmic_auxadc AUXADC_VCDT>;
+		io-channel-names = "pmic_vbus";
+		status = "okay";
+		pump {
+			sc,sc854x,irq-gpio = <&pio 1 IRQ_TYPE_EDGE_FALLING>;
+			charger_name = "primary_dvchg";
+			sc,sc854x,adc-rate = <0>;  /* 0:Continuous conversion  1:One-shot */
+			sc,sc854x,bat-ovp-disable = <0>;  /* 0:enable protetion  1:disable protetion */
+			sc,sc854x,bat-ocp-disable = <1>;  /* 0:enable protetion  1:disable protetion */
+			sc,sc854x,vdrop-ovp-disable = <0>;  /* 0:enable protetion  1:disable protetion */
+			sc,sc854x,bus-ovp-disable = <0>;  /* 0:enable protetion  1:disable protetion */
+			sc,sc854x,bus-ucp-disable = <0>;  /* 0:enable protetion  1:disable protetion */
+			sc,sc854x,bus-ocp-disable = <0>;  /* 0:enable protetion  1:disable protetion */
+			sc,sc854x,bat-ovp-threshold = <41>;  /* val * 25 + 3500 mv [0-63] */
+			sc,sc854x,bat-ocp-threshold = <50>;  /* val * 100 + 2000 ma [0-63] */
+			sc,sc854x,ac-ovp-threshold = <2>;  /* val * 1000 + 11000 mv  [0-7] when val = 7 the value = 6500mv */
+			sc,sc854x,bus-ovp-threshold = <100>;  /* val * 50 + 6000 mv [0-127] */
+			sc,sc854x,bus-ocp-threshold = <10>;  /* val * 300 + 1200 ma [0-15] */
+			sc,sc854x,sense-resistor-mohm = <0>;  /* 0:5mΩ 1:2mΩ */
+			sc,sc854x,reg-timeout-disable = <0>;  /* 0:enable 1:disable */
+			sc,sc854x,ibat-regulation-enable = <0>;  /* 0:disable 1:enable */
+			sc,sc854x,vbat-regulation-enable = <0>;  /* 0:disable 1:enable */
+			sc,sc854x,ibat-regulation-threshold = <1>;  /* 0:200 mA 1:300 mA 2:400 mA 3:500 mA */
+			sc,sc854x,vbat-regulation-threshold = <0>;  /* 0:50 mV 1:100 mV 2:150 mV 3:200 mV */
+			sc,sc854x,vdrop-deglitch = <0>;  /* 0:5ms 1:8us */
+			sc,sc854x,vdrop-ovp-threshold = <1>;  /* 0:300mV 1:400mV */
+		};
+
+		buck {
+			eint_name = "chr_stat";
+			sc,intr-gpio = <&pio 3 IRQ_TYPE_EDGE_FALLING>;
+			charger_name = "sub_chg1";
+			sc,sc8989x,ico-en = <0>;
+			sc,sc8989x,hvdcp-en = <0>;
+			sc,sc8989x,auto-dpdm-en = <0>;
+			sc,sc8989x,vsys-min = <5>; /*3500mV*/
+			sc,sc8989x,vbatmin-sel = <0>; /*0:2.9V 1:2.5V*/
+			sc,sc8989x,itrick = <3>; /*60 + val *60*/
+			sc,sc8989x,iterm = <12>; /*30 + val * 60*/
+			sc,sc8989x,vbat-cv = <40>; /*3840 + val * 16*/
+			sc,sc8989x,vbat-low = <1>; /*0:2.8V 1:3V*/
+			sc,sc8989x,vrechg = <1>; /*0:100mV 1:200mV*/
+			sc,sc8989x,en-term = <1>;
+			sc,sc8989x,stat-dis = <0>;
+			sc,sc8989x,wd-time = <0>; /*0:Dis 1:40s 2:80s 3:160s*/
+			sc,sc8989x,en-timer = <1>;
+			sc,sc8989x,charge-timer = <2>; /*0:5h 1:8h 2:12h 3:20h*/
+			sc,sc8989x,bat-comp = <0>; /*val * 20*/
+			sc,sc8989x,vclamp = <0>; /*val *32*/
+			sc,sc8989x,votg = <12>; /*3900 + val * 100*/
+			sc,sc8989x,iboost = <7>; /*0:0.5A 3:1.4A 5:1.875A 7:2.45A*/
+			sc,sc8989x,force_vindpm = <0>;
+			sc,sc8989x,vindpm = <21>; /*2600 + val * 100*/
+		};
+	};
+
+	hl7015db_subchg1: chg@6B {
+		compatible = "mtk,hl7015";
+		reg = <0x6B>;
+		status = "okay";
+		irq-gpio = <&pio 3 IRQ_TYPE_EDGE_FALLING>;
+		io-channels = <&pmic_auxadc AUXADC_VCDT>;
+		io-channel-names = "pmic_vbus";
+		chg-name = "sub_chg1";
+		hl7015db,iterm = <768000>;
+	};
+};
+
+&i2c9 {
+	clock-frequency = <400000>;
+
+	mm8xxx_gauge: gauge@55 {
+		compatible = "mitsumi,mm8013c10";
+		reg = <0x55>;
+		status = "okay";
+		io-channels = <&pmic_auxadc AUXADC_BATADC>;
+		io-channel-names = "pmic_vbat";
+	};
+
+	sc8989x_subchg2: chg@6A {
+		compatible = "southchip,sc89890h";
+		reg = <0x6A>;
+		status = "okay";
+		eint_name = "chr_stat";
+		sc,intr-gpio = <&pio 8 IRQ_TYPE_EDGE_FALLING>;
+		charger_name = "sub_chg2";
+		io-channels = <&pmic_auxadc AUXADC_VCDT>;
+		io-channel-names = "pmic_vbus";
+		sc,sc8989x,ico-en = <0>;
+		sc,sc8989x,hvdcp-en = <0>;
+		sc,sc8989x,auto-dpdm-en = <0>;
+		sc,sc8989x,vsys-min = <5>; /*3500mV*/
+		sc,sc8989x,vbatmin-sel = <0>; /*0:2.9V 1:2.5V*/
+		sc,sc8989x,itrick = <3>; /*60 + val *60*/
+		sc,sc8989x,iterm = <12>; /*30 + val * 60*/
+		sc,sc8989x,vbat-cv = <40>; /*3840 + val * 16*/
+		sc,sc8989x,vbat-low = <1>; /*0:2.8V 1:3V*/
+		sc,sc8989x,vrechg = <1>; /*0:100mV 1:200mV*/
+		sc,sc8989x,en-term = <1>;
+		sc,sc8989x,stat-dis = <0>;
+		sc,sc8989x,wd-time = <0>; /*0:Dis 1:40s 2:80s 3:160s*/
+		sc,sc8989x,en-timer = <1>;
+		sc,sc8989x,charge-timer = <2>; /*0:5h 1:8h 2:12h 3:20h*/
+		sc,sc8989x,bat-comp = <0>; /*val * 20*/
+		sc,sc8989x,vclamp = <0>; /*val *32*/
+		sc,sc8989x,votg = <12>; /*3900 + val * 100*/
+		sc,sc8989x,iboost = <7>; /*0:0.5A 3:1.4A 5:1.875A 7:2.45A*/
+		sc,sc8989x,force_vindpm = <0>;
+		sc,sc8989x,vindpm = <21>; /*2600 + val * 100*/
+	};
+
+	hl7015db_subchg2: chg@6B {
+		compatible = "mtk,hl7015";
+		reg = <0x6B>;
+		status = "okay";
+		irq-gpio = <&pio 8 IRQ_TYPE_EDGE_FALLING>;
+		io-channels = <&pmic_auxadc AUXADC_VCDT>;
+		io-channel-names = "pmic_vbus";
+		chg-name = "sub_chg2";
+		hl7015db,iterm = <768000>;
+	};
+};
+
+&extcon_usb {
+	status = "okay";
+};
+
+&charger {
+	gauge = <&mm8xxx_gauge>;
+	charger_configuration = <3>;
+	max_charger_voltage = <10000000>;
+	battery_cv = <4512000>;
+	min_charger_voltage = <4700000>;
+	ac_charger_current = <1980000>;
+	ac_charger_input_current = <2000000>;
+
+	enable_sw_jeita;
+	jeita_temp_above_t4_cv = <4480000>;
+	jeita_temp_t3_to_t4_cv = <4176000>;
+	jeita_temp_t2_to_t3_cv = <4520000>;
+	jeita_temp_t1_to_t2_cv = <4520000>;
+	jeita_temp_t0_to_t1_cv = <4480000>;
+	jeita_temp_below_t0_cv = <4480000>;
+	temp_t4_thres = <50>;
+	temp_t4_thres_minus_x_degree = <50>;
+	temp_t3_thres = <45>;
+	temp_t3_thres_minus_x_degree = <45>;
+	temp_t2_thres = <15>;
+	temp_t2_thres_plus_x_degree = <15>;
+	temp_t1_thres = <0>;
+	temp_t1_thres_plus_x_degree = <0>;
+	temp_t0_thres = <0>;
+	temp_t0_thres_plus_x_degree = <0>;
+	temp_neg_10_thres = <0>;
+};
+
+&mtk_ctd {
+        bc12_sel = <2>;
+};
+
+&pdc {
+	gauge = <&mm8xxx_gauge>;
+	pd_stop_battery_soc = <0>;
+};
+
+&u2port0 {
+	mediatek,eye-vrt = <6>;
+	mediatek,eye-vrt-host = <5>;
+	mediatek,eye-term-host = <6>;
+	mediatek,rev6-host = <2>;
+};
+
+&pe5 {
+	ifod_threshold = <600>;
+	idvchg_ss_init = <1500>;
+	tdvchg_level_def = <0 0 0 5 25 75 80 85 90>;
+	ita_level = <4400 4400 4000 3500>;
+	vta_cap_max = <11000>;
+	vbat_cv = <4520>;
+	idvchg_term = <700>;
+	start_soc_max = <90>;
+	start_vbat_max = <4350>;
+	chg_time_max = <14400>;
+	gauge = <&mm8xxx_gauge>;
+};
+
+&lk_charger {
+        ac_charger_current = <2000000>;
+        ac_charger_input_current = <2000000>;
+        non_std_ac_charger_current = <2000000>;
+        fast_charge_voltage = <3200000>;
+        boot_battery_voltage = <3500000>;
+};
+
+&{/} {
+	charge_misc {
+		compatible = "misc,charge";
+		usb-overtemp-en-gpio = <&pio 156 IRQ_TYPE_EDGE_FALLING>;
+		usb-temp-zone-name = "usb_temp";
+	};
+};
+

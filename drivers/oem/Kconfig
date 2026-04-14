@@ -1,0 +1,29 @@
+config FACTORY_BUILD
+        tristate "factory special dirver"
+        help
+          Say Yes to enable factory special driver
+
+config TOUCHSCREEN_NT36xxx_HOSTDL_SPI_OEM
+        tristate  "Novatek NT36xxx host download SPI driver"
+        default y
+        help
+          Say Y here if you have a Novatek NT36xxx no flash touchscreen connected
+          to your system by SPI bus.
+
+          If unsure, say N.
+
+source "drivers/oem/NVT_Touch_HostDL/Kconfig"
+source "drivers/oem/AUDIO/Kconfig"
+source "drivers/oem/switch_charger/Kconfig"
+source "drivers/oem/pump_charger/Kconfig"
+source "drivers/oem/typec/Kconfig"
+source "drivers/oem/gauge/Kconfig"
+source "drivers/oem/charge_misc/Kconfig"
+source "drivers/oem/Panel/Kconfig"
+source "drivers/oem/aw/Kconfig"
+# TN Begin modify by yangyp 20231123 OCALLA-80
+source "drivers/oem/dev_info/Kconfig"
+# TN End modify by yangyp 20231123 OCALLA-80
+# TS add begin for adding lcd off charger cooling device OCALLA-609 by lgf 20231204
+source "drivers/oem/thermal/Kconfig"
+# TS add end for adding lcd off charger cooling deivce OCALLA-609 by lgf 20231204

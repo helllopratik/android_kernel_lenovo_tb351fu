@@ -1,0 +1,36 @@
+&mtk_leds {
+	compatible = "mediatek,disp-leds";
+	backlight {
+		led_mode = <4>;
+		trans-bits = <11>;
+		max-brightness = <255>;
+		max-hw-brightness = <2047>;
+	};
+};
+
+&dsi0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	panel1@0 {
+		compatible = "boe,nt36523n,vdo";
+		reg = <0>;
+		bl-enable-gpios = <&pio 43 0>;
+		vddi-gpios = <&pio 18 0>;
+		reset-gpios = <&pio 85 0>;
+		bias-gpios = <&pio 159 0>,
+		<&pio 158 0>;
+		pinctrl-names = "default";
+	};
+	panel2@0 {
+		compatible = "csot,nt36523n,vdo";
+		reg = <1>;
+		bl-enable-gpios = <&pio 43 0>;
+		vddi-gpios = <&pio 18 0>;
+		reset-gpios = <&pio 85 0>;
+		bias-gpios = <&pio 159 0>,
+		<&pio 158 0>;
+		pinctrl-names = "default";
+	};
+};
+
