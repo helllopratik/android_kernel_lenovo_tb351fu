@@ -1,0 +1,17 @@
+config CHARGER_SC8989X
+        tristate "SC8989X charger driver"
+        help
+          Say Y to enable support for the SC8989X charger.
+          The driver supports controlling switching charger and OTG
+          with high-accuracy current and voltage regulation.
+          The device is compliant with the USB Battery Charging Specification
+          Revision 1.2.
+
+config CHARGER_HL7015DB
+        tristate "HL7015DB charger driver"
+        help
+          Say Y to enable support for the HL7015DB charger.
+          The driver supports controlling switching charger and OTG
+          with high-accuracy current and voltage regulation.
+          The device is compliant with the USB Battery Charging Specification
+          Revision 1.2.

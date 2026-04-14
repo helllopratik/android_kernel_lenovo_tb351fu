@@ -1,0 +1,18 @@
+#
+# awinic driver configuration
+#
+
+config OEM_TCPC_PD_AW35615
+	tristate "Awinic Pd"
+	depends on I2C
+	help
+		this option enables support for the AW35615 PD connected
+		through I2C. Say Y to enable support for the AW35615 PD
+
+
+config OEM_TCPC_PD_CPS8851
+	tristate "ConvenientPower Pd"
+	depends on I2C
+	help
+		this option enables support for the ConvenientPower PD connected
+		through I2C. Say Y to enable support for the CPS8851 PD

@@ -1,0 +1,4 @@
+config CHARGE_MISC
+	tristate "charge misc driver"
+	help
+	  Say Y to enable support for the misc charge driver.

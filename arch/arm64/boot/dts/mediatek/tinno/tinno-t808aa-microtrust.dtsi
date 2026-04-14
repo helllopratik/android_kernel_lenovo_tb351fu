@@ -1,0 +1,15 @@
+/* Microtrust(TEEI) utos real driver */
+
+&utos {
+	microtrust,real-drv = <1>;
+};
+
+&mtee_svp {
+	mtee:MTEE {
+		compatible = "mediatek,mtk_svp_on_mtee_support";
+	};
+	svp:SecureVideoPath {
+		compatible = "mediatek,mtk_sec_video_path_support";
+	};
+};
+

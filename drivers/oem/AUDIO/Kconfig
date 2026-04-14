@@ -1,0 +1,1 @@
+source "drivers/oem/AUDIO/aw883xx/Kconfig"
