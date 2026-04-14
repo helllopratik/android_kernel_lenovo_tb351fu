@@ -1,150 +1,89 @@
-# How do I submit patches to Android Common Kernels
+<p align="center">
+  <img src="assets/readme-banner.svg" alt="Lenovo Tab Plus TB351FU kernel tree banner" />
+</p>
 
-1. BEST: Make all of your changes to upstream Linux. If appropriate, backport to the stable releases.
-   These patches will be merged automatically in the corresponding common kernels. If the patch is already
-   in upstream Linux, post a backport of the patch that conforms to the patch requirements below.
-   - Do not send patches upstream that contain only symbol exports. To be considered for upstream Linux,
-additions of `EXPORT_SYMBOL_GPL()` require an in-tree modular driver that uses the symbol -- so include
-the new driver or changes to an existing driver in the same patchset as the export.
-   - When sending patches upstream, the commit message must contain a clear case for why the patch
-is needed and beneficial to the community. Enabling out-of-tree drivers or functionality is not
-not a persuasive case.
+# Android Kernel Tree for Lenovo Tab Plus TB351FU
 
-2. LESS GOOD: Develop your patches out-of-tree (from an upstream Linux point-of-view). Unless these are
-   fixing an Android-specific bug, these are very unlikely to be accepted unless they have been
-   coordinated with kernel-team@android.com. If you want to proceed, post a patch that conforms to the
-   patch requirements below.
+This repository hosts the Linux kernel source tree currently being used for the Lenovo Tab Plus `TB351FU` bring-up work.
 
-# Common Kernel patch requirements
+It is based on Lenovo's published open-source kernel release and is being reworked for custom development, testing, and Android 16 compatibility work around the `TB351FU` platform. The current focus is practical device bring-up, not a final production-ready Android 16 kernel release.
 
-- All patches must conform to the Linux kernel coding standards and pass `script/checkpatch.pl`
-- Patches shall not break gki_defconfig or allmodconfig builds for arm, arm64, x86, x86_64 architectures
-(see  https://source.android.com/setup/build/building-kernels)
-- If the patch is not merged from an upstream branch, the subject must be tagged with the type of patch:
-`UPSTREAM:`, `BACKPORT:`, `FROMGIT:`, `FROMLIST:`, or `ANDROID:`.
-- All patches must have a `Change-Id:` tag (see https://gerrit-review.googlesource.com/Documentation/user-changeid.html)
-- If an Android bug has been assigned, there must be a `Bug:` tag.
-- All patches must have a `Signed-off-by:` tag by the author and the submitter
+> [!NOTE]
+> This tree is shared for educational and development use. Credit for the initial platform source belongs to Lenovo and the original upstream Linux / Android kernel contributors whose work this tree builds on.
 
-Additional requirements are listed below based on patch type
+## Current Status
 
-## Requirements for backports from mainline Linux: `UPSTREAM:`, `BACKPORT:`
+- Base source: Lenovo open-source release for the `TB351FU` platform
+- Kernel version: `5.10.177`
+- Primary defconfig: `arch/arm64/configs/t808aa_defconfig`
+- Toolchain direction in-tree: Clang / LLVM (`LLVM=1`, `LLVM_IAS=1`)
+- Ongoing work: cleanup, bring-up, and Android 16 compatibility adjustments for the TB351FU custom ROM stack
 
-- If the patch is a cherry-pick from Linux mainline with no changes at all
-    - tag the patch subject with `UPSTREAM:`.
-    - add upstream commit information with a `(cherry picked from commit ...)` line
-    - Example:
-        - if the upstream commit message is
-```
-        important patch from upstream
+## Device Reference
 
-        This is the detailed description of the important patch
+This kernel is paired with the Lenovo Tab Plus `TB351FU` custom ROM effort. The values below come from the kernel tree itself and the matching public bring-up trees used with it.
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        UPSTREAM: important patch from upstream
+| Item | Value |
+| --- | --- |
+| Device | Lenovo Tab Plus `TB351FU` |
+| Board | `t808aa` |
+| Platform family | MediaTek `MT6789` / `MT8781` bring-up target |
+| Architecture | `arm64` primary, `arm` secondary compatibility |
+| Kernel base | Linux `5.10.177` |
+| Boot setup | Boot header v4, DTB included in boot image |
+| ROM direction | Android 16 / LineageOS bring-up |
+| Related hardware features in the public trees | Dolby hooks, Lenovo pen support, virtual A/B, AVB-enabled layout |
 
-        This is the detailed description of the important patch
+## What Is In This Tree
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
+- Lenovo-sourced kernel base for the TB351FU platform
+- MediaTek platform support for the active bring-up target
+- OEM-facing drivers and platform-specific integration points used by the stock software base
+- The `t808aa_defconfig` currently referenced by the matching device tree
 
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
+## Build Reference
+
+This tree is not trying to replace the full Android build environment documentation. The commands below are a practical starting point for people already working inside an AOSP or LineageOS environment with the required toolchains available.
+
+```bash
+export ARCH=arm64
+export SUBARCH=arm64
+
+make O=out LLVM=1 LLVM_IAS=1 t808aa_defconfig
+make -j"$(nproc)" O=out LLVM=1 LLVM_IAS=1
 ```
 
-- If the patch requires any changes from the upstream version, tag the patch with `BACKPORT:`
-instead of `UPSTREAM:`.
-    - use the same tags as `UPSTREAM:`
-    - add comments about the changes under the `(cherry picked from commit ...)` line
-    - Example:
-```
-        BACKPORT: important patch from upstream
+If you are building through a full Android tree, use the same kernel path and defconfig that the paired device tree expects:
 
-        This is the detailed description of the important patch
+- `TARGET_KERNEL_SOURCE := kernel/lenovo/TB351FU`
+- `TARGET_KERNEL_CONFIG := t808aa_defconfig`
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
+## Repository Pointers
 
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        [joe: Resolved minor conflict in drivers/foo/bar.c ]
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
+- [arch/arm64/configs/t808aa_defconfig](arch/arm64/configs/t808aa_defconfig): active defconfig used by the matching device tree
+- [build.config.mtk.aarch64](build.config.mtk.aarch64): Mediatek-oriented build configuration reference
+- [android/abi_gki_aarch64_lenovo](android/abi_gki_aarch64_lenovo): ABI symbol list used for Lenovo-oriented GKI module compatibility work
 
-## Requirements for other backports: `FROMGIT:`, `FROMLIST:`,
+## Scope And Intent
 
-- If the patch has been merged into an upstream maintainer tree, but has not yet
-been merged into Linux mainline
-    - tag the patch subject with `FROMGIT:`
-    - add info on where the patch came from as `(cherry picked from commit <sha1> <repo> <branch>)`. This
-must be a stable maintainer branch (not rebased, so don't use `linux-next` for example).
-    - if changes were required, use `BACKPORT: FROMGIT:`
-    - Example:
-        - if the commit message in the maintainer tree is
-```
-        important patch from upstream
+The goal of this repository is to make the published Lenovo kernel source more useful for community development on the `TB351FU`, especially for:
 
-        This is the detailed description of the important patch
+- recovery bring-up
+- LineageOS / Android 16 experimentation
+- debugging boot and hardware initialization issues
+- educational study of the platform kernel layout
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        FROMGIT: important patch from upstream
+This does **not** mean every subsystem is already validated for daily-driver use on Android 16. Expect ongoing changes as bring-up progresses.
 
-        This is the detailed description of the important patch
+## Credits
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
+- Lenovo, for publishing the original open-source kernel base used here
+- Linux kernel contributors and Android kernel maintainers upstream
+- LineageOS and the Android aftermarket development community for bring-up patterns, tooling, and debugging workflows
 
-        Bug: 135791357
-        (cherry picked from commit 878a2fd9de10b03d11d2f622250285c7e63deace
-         https://git.kernel.org/pub/scm/linux/kernel/git/foo/bar.git test-branch)
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
+## Related Repositories
 
-
-- If the patch has been submitted to LKML, but not accepted into any maintainer tree
-    - tag the patch subject with `FROMLIST:`
-    - add a `Link:` tag with a link to the submittal on lore.kernel.org
-    - add a `Bug:` tag with the Android bug (required for patches not accepted into
-a maintainer tree)
-    - if changes were required, use `BACKPORT: FROMLIST:`
-    - Example:
-```
-        FROMLIST: important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        Link: https://lore.kernel.org/lkml/20190619171517.GA17557@someone.com/
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-## Requirements for Android-specific patches: `ANDROID:`
-
-- If the patch is fixing a bug to Android-specific code
-    - tag the patch subject with `ANDROID:`
-    - add a `Fixes:` tag that cites the patch with the bug
-    - Example:
-```
-        ANDROID: fix android-specific bug in foobar.c
-
-        This is the detailed description of the important fix
-
-        Fixes: 1234abcd2468 ("foobar: add cool feature")
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-- If the patch is a new feature
-    - tag the patch subject with `ANDROID:`
-    - add a `Bug:` tag with the Android bug (required for android-specific features)
-
+- Device tree: <https://github.com/helllopratik/android_device_lenovo_tb351fu>
+- Vendor tree: <https://github.com/helllopratik/android_vendor_lenovo_tb351fu>
+- Recovery tree: <https://github.com/helllopratik/twrp_device_lenovo_TB351FU>
+- TB351FU dev page: <https://helllopratik.github.io/tb351fu/>
