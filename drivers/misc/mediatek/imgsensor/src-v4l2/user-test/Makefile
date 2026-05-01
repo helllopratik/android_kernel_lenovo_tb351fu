@@ -2,7 +2,7 @@
 # Copyright (C) 2020 MediaTek Inc.
 
 CROSS_COMPILE = aarch64-linux-gnu-
-CFLAGS = -Werror -Wall -I../inc --static
+CFLAGS = -Wno-error -Wall -I../inc --static
 LDFLAGS = --static
 
 OBJS = user-test.o

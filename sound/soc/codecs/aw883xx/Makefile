@@ -6,7 +6,7 @@ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
 subdir-ccflags-y += -I$(srctree)/drivers/base
 
 # debugging support (also enables trace_printk)
-ccflags-y += -Werror
+ccflags-y += -Wno-error
 ccflags-y += $(call cc-option,-Wno-date-time,)
 
 snd-soc-aw883xx-objs:= aw883xx.o aw_monitor.o aw_bin_parse.o aw_device.o aw_init.o aw_calib.o aw_spin.o

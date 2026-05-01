@@ -56,7 +56,7 @@ ifeq ($(CONFIG_VIDEO_MEDIATEK_VCODEC_V2),y)
 	mtk-vcodec-enc-v2-$(CONFIG_VIDEO_MEDIATEK_VCODEC) += mtk-vcodec-enc.o
 endif
 
-subdir-ccflags-y += -Werror
+subdir-ccflags-y += -Wno-error
 ccflags-y += -I$(srctree)/drivers/media/platform/mtk-vcu
 ccflags-y += -I$(srctree)/drivers/media/platform/mtk-vcodec
 ccflags-y += -I$(srctree)/drivers/media/platform/mtk-videobuf

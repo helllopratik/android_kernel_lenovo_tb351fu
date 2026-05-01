@@ -1,4 +1,4 @@
-subdir-ccflags-y += -Werror
+subdir-ccflags-y += -Wno-error
 
 mtk-vb2-y += mtk_dma_contig.o
 

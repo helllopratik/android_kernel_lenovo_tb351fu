@@ -16,9 +16,9 @@
 #else
 #define seninf_aee_print(string, args...) do { \
 		aee_kernel_exception_api(__FILE__, __LINE__, \
-			DB_OPT_DEFAULT | DB_OPT_FTRACE, \
-			DB_OPT_PROCESS_COREDUMP | DB_OPT_PROCMEM, \
-			DB_OPT_NE_JBT_TRACES | DB_OPT_PID_SMAPS, \
+			DB_OPT_DEFAULT | DB_OPT_FTRACE | \
+			DB_OPT_PROCESS_COREDUMP | DB_OPT_PROCMEM | \
+			DB_OPT_NE_JBT_TRACES | DB_OPT_PID_SMAPS | \
 			DB_OPT_DUMPSYS_PROCSTATS | DB_OPT_DUMP_DISPLAY, \
 			"Seninf", "[SENINF] error:"string, ##args); \
 		pr_info("[SENINF] error:"string, ##args);  \

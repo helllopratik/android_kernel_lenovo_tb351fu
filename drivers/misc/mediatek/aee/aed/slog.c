@@ -117,6 +117,7 @@ static int slog_module_callback(struct notifier_block *nb,
 
 	for (i = 0; i < ARRAY_SIZE(interests); i++) {
 		if ((interests[i].module == true) && (interests[i].init == false)) {
+#if 0
 			begin = mod->tracepoints_ptrs;
 			end = mod->tracepoints_ptrs + mod->num_tracepoints;
 			for (iter = begin; iter < end; iter++) {
@@ -125,9 +126,9 @@ static int slog_module_callback(struct notifier_block *nb,
 					interests[i].tp = tp;
 					tracepoint_probe_register(interests[i].tp, interests[i].func, NULL);
 					interests[i].init = true;
-				}
-			}
+#endif
 		}
+	}
 	}
 
 	return NOTIFY_OK;

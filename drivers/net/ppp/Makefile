@@ -3,7 +3,7 @@
 # Makefile for the Linux PPP network device drivers.
 #
 
-obj-$(CONFIG_PPP) += ppp_generic.o
+obj-$(CONFIG_PPP) += ppp_generic.o pppox.o
 obj-$(CONFIG_PPP_ASYNC) += ppp_async.o
 obj-$(CONFIG_PPP_BSDCOMP) += bsd_comp.o
 obj-$(CONFIG_PPP_DEFLATE) += ppp_deflate.o

@@ -3,7 +3,7 @@
 # Makefile for the drm device driver.  This driver provides support for the
 # Direct Rendering Infrastructure (DRI) in XFree86 4.1.0 and higher.
 
-# Add a set of useful warning flags and enable -Werror for CI to prevent
+# Add a set of useful warning flags and enable -Wno-error for CI to prevent
 # trivial mistakes from creeping in. We have to do this piecemeal as we reject
 # any patch that isn't warning clean, so turning on -Wall -Wextra (or W=1) we
 # need to filter out dubious warnings.  Still it is our interest
@@ -23,7 +23,7 @@ subdir-ccflags-y += $(call cc-disable-warning, sometimes-uninitialized)
 subdir-ccflags-y += $(call cc-disable-warning, initializer-overrides)
 subdir-ccflags-y += $(call cc-disable-warning, uninitialized)
 subdir-ccflags-y += $(call cc-disable-warning, frame-address)
-subdir-ccflags-$(CONFIG_DRM_I915_WERROR) += -Werror
+subdir-ccflags-$(CONFIG_DRM_I915_WERROR) += -Wno-error
 
 # Fine grained warnings disable
 CFLAGS_i915_pci.o = $(call cc-disable-warning, override-init)

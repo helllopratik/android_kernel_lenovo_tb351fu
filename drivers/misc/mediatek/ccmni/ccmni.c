@@ -1252,6 +1252,7 @@ const struct header_ops ccmni_eth_header_ops ____cacheline_aligned = {
 /* vendor hook callback function
  * used to disable auto generate ipv6 link-local address for ccmni device
  */
+#ifdef CONFIG_ANDROID_VENDOR_HOOKS
 static void mtk_dis_ipv6_lla(void *ignore, struct net_device *dev, bool *ret)
 {
 	if (!strncmp(dev->name, "ccmni", 5))
@@ -1259,6 +1260,7 @@ static void mtk_dis_ipv6_lla(void *ignore, struct net_device *dev, bool *ret)
 	else
 		*ret = false;
 }
+#endif
 
 static int ccmni_init(int md_id, struct ccmni_ccci_ops *ccci_info)
 {

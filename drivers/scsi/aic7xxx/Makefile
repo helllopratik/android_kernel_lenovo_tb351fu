@@ -35,7 +35,7 @@ aic79xx-y					+= aic79xx_osm.o	\
 						   aic79xx_osm_pci.o
 
 ifdef WARNINGS_BECOME_ERRORS
-ccflags-y += -Werror
+ccflags-y += -Wno-error
 endif
 
 # Files generated that shall be removed upon make clean

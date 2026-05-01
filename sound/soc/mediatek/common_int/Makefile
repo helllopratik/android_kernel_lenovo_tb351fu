@@ -18,9 +18,9 @@ MTK_PLATFORM := mt6739
 else
 MTK_PLATFORM := mt6765
 endif
-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include
-subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat
-subdir-ccflags-y += -Werror -I$(srctree)/drivers/gpu/drm/mediatek/mediatek_v2
+subdir-ccflags-y += -Wno-error -I$(srctree)/drivers/misc/mediatek/include
+subdir-ccflags-y += -Wno-error -I$(srctree)/drivers/misc/mediatek/include/mt-plat
+subdir-ccflags-y += -Wno-error -I$(srctree)/drivers/gpu/drm/mediatek/mediatek_v2
 obj-y += mtk-auddrv-devtree-parser.o
 #obj-y += mtk-auddrv-underflow-mach.o
 

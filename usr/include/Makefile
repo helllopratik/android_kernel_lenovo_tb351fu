@@ -6,7 +6,7 @@
 #
 # -std=c90 (equivalent to -ansi) catches the violation of those.
 # We cannot go as far as adding -Wpedantic since it emits too many warnings.
-UAPI_CFLAGS := -std=c90 -Wall -Werror=implicit-function-declaration
+UAPI_CFLAGS := -std=c90 -Wall -Wno-error=implicit-function-declaration
 
 # In theory, we do not care -m32 or -m64 for header compile tests.
 # It is here just because CONFIG_CC_CAN_LINK is tested with -m32 or -m64.

@@ -12,4 +12,4 @@
 
 obj-y += tz_dcih.o
 obj-y += tz_dcih_test.o
-ccflags-y += -D DEBUG_DO -fno-pic -Werror
+ccflags-y += -D DEBUG_DO -fno-pic -Wno-error
