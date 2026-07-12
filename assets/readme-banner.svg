@@ -1,0 +1,51 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="640" rx="36" fill="#08131A"/>
+  <rect width="1280" height="640" rx="36" fill="url(#bg)"/>
+  <circle cx="180" cy="126" r="118" fill="url(#glow1)" opacity="0.42"/>
+  <circle cx="1088" cy="520" r="176" fill="url(#glow2)" opacity="0.28"/>
+  <rect x="62" y="62" width="1156" height="516" rx="28" fill="rgba(6,12,18,0.58)" stroke="rgba(255,255,255,0.10)"/>
+
+  <rect x="742" y="126" width="386" height="250" rx="28" fill="#0F1E28" stroke="#2E4E63"/>
+  <rect x="776" y="158" width="318" height="186" rx="22" fill="#0A151D" stroke="#385A6E"/>
+  <rect x="808" y="192" width="254" height="118" rx="18" fill="#112633"/>
+  <rect x="862" y="222" width="146" height="58" rx="14" fill="#132E3F" stroke="#69E0C8"/>
+  <path d="M792 142H864" stroke="#67D2FF" stroke-width="8" stroke-linecap="round"/>
+  <path d="M792 360H874" stroke="#F5B870" stroke-width="8" stroke-linecap="round"/>
+  <path d="M1050 142H1078" stroke="#67D2FF" stroke-width="8" stroke-linecap="round"/>
+  <path d="M1030 360H1078" stroke="#F5B870" stroke-width="8" stroke-linecap="round"/>
+
+  <rect x="738" y="418" width="166" height="94" rx="22" fill="#101D27" stroke="#2A475B"/>
+  <rect x="926" y="418" width="202" height="94" rx="22" fill="#101D27" stroke="#2A475B"/>
+  <path d="M782 455H860" stroke="#69E0C8" stroke-width="10" stroke-linecap="round"/>
+  <path d="M958 455H1096" stroke="#67D2FF" stroke-width="10" stroke-linecap="round"/>
+  <path d="M958 480H1042" stroke="#F5B870" stroke-width="10" stroke-linecap="round"/>
+
+  <text x="108" y="184" fill="#8FD8FF" font-family="Space Grotesk, Arial, sans-serif" font-size="26" font-weight="700" letter-spacing="2">LENOVO TAB PLUS / TB351FU</text>
+  <text x="108" y="270" fill="#F7FBFF" font-family="Space Grotesk, Arial, sans-serif" font-size="64" font-weight="700">Android Kernel Tree</text>
+  <text x="108" y="332" fill="#C6D8E5" font-family="IBM Plex Sans, Arial, sans-serif" font-size="30">Lenovo source base, Linux 5.10.177, t808aa_defconfig</text>
+  <text x="108" y="385" fill="#C6D8E5" font-family="IBM Plex Sans, Arial, sans-serif" font-size="30">for custom bring-up and Android 16 compatibility work.</text>
+
+  <rect x="108" y="434" width="198" height="56" rx="18" fill="#10222C" stroke="#294B5D"/>
+  <rect x="322" y="434" width="198" height="56" rx="18" fill="#10222C" stroke="#294B5D"/>
+  <rect x="536" y="434" width="142" height="56" rx="18" fill="#10222C" stroke="#294B5D"/>
+
+  <text x="140" y="470" fill="#69E0C8" font-family="IBM Plex Sans, Arial, sans-serif" font-size="24" font-weight="700">MT6789 / MT8781</text>
+  <text x="369" y="470" fill="#67D2FF" font-family="IBM Plex Sans, Arial, sans-serif" font-size="24" font-weight="700">LLVM Build Flow</text>
+  <text x="579" y="470" fill="#F5B870" font-family="IBM Plex Sans, Arial, sans-serif" font-size="24" font-weight="700">A16</text>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08131A"/>
+      <stop offset="0.55" stop-color="#10212B"/>
+      <stop offset="1" stop-color="#0A161E"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(180 126) rotate(90) scale(118)">
+      <stop stop-color="#6ED6FF"/>
+      <stop offset="1" stop-color="#6ED6FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1088 520) rotate(90) scale(176)">
+      <stop stop-color="#FFC270"/>
+      <stop offset="1" stop-color="#FFC270" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>
