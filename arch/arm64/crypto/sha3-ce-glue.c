@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * sha3-ce-glue.c - core SHA-3 transform using v8.2 Crypto Extensions
  *
@@ -12,7 +12,7 @@
 #include <asm/hwcap.h>
 #include <asm/neon.h>
 #include <asm/simd.h>
-#include <asm/unaligned.h>
+#include <linux/unaligned.h>
 #include <crypto/internal/hash.h>
 #include <crypto/internal/simd.h>
 #include <crypto/sha3.h>
@@ -102,7 +102,7 @@ static int sha3_final(struct shash_desc *desc, u8 *out)
 	if (digest_size & 4)
 		put_unaligned_le32(sctx->st[i], (__le32 *)digest);
 
-	*sctx = (struct sha3_state){};
+	memzero_explicit(sctx, sizeof(*sctx));
 	return 0;
 }
 

@@ -1,21 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * TI SYSCON regmap reset driver
  *
  * Copyright (C) 2015-2016 Texas Instruments Incorporated - https://www.ti.com/
  *	Andrew F. Davis <afd@ti.com>
  *	Suman Anna <afd@ti.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed "as is" WITHOUT ANY WARRANTY of any
- * kind, whether express or implied; without even the implied warranty
- * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
-#include <linux/delay.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -57,7 +48,6 @@ struct ti_syscon_reset_data {
 	struct regmap *regmap;
 	struct ti_syscon_reset_control *controls;
 	unsigned int nr_controls;
-	unsigned int reset_duration_us;
 };
 
 #define to_ti_syscon_reset_data(_rcdev)	\
@@ -160,26 +150,9 @@ static int ti_syscon_reset_status(struct reset_controller_dev *rcdev,
 		!(control->flags & STATUS_SET);
 }
 
-static int ti_syscon_reset(struct reset_controller_dev *rcdev,
-				unsigned long id)
-{
-	struct ti_syscon_reset_data *data = to_ti_syscon_reset_data(rcdev);
-	int ret;
-
-	ret = ti_syscon_reset_assert(rcdev, id);
-	if (ret)
-		return ret;
-
-	if (data->reset_duration_us)
-		usleep_range(data->reset_duration_us, data->reset_duration_us * 2);
-
-	return ti_syscon_reset_deassert(rcdev, id);
-}
-
 static const struct reset_control_ops ti_syscon_reset_ops = {
 	.assert		= ti_syscon_reset_assert,
 	.deassert	= ti_syscon_reset_deassert,
-	.reset      = ti_syscon_reset,
 	.status		= ti_syscon_reset_status,
 };
 
@@ -223,9 +196,6 @@ static int ti_syscon_reset_probe(struct platform_device *pdev)
 		controls[i].flags = be32_to_cpup(list++);
 	}
 
-	of_property_read_u32(pdev->dev.of_node, "reset-duration-us",
-		&data->reset_duration_us);
-
 	data->rcdev.ops = &ti_syscon_reset_ops;
 	data->rcdev.owner = THIS_MODULE;
 	data->rcdev.of_node = np;
@@ -233,8 +203,6 @@ static int ti_syscon_reset_probe(struct platform_device *pdev)
 	data->regmap = regmap;
 	data->controls = controls;
 	data->nr_controls = nr_controls;
-
-	platform_set_drvdata(pdev, data);
 
 	return devm_reset_controller_register(dev, &data->rcdev);
 }

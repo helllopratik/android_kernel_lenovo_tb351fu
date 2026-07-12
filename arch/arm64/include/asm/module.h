@@ -7,7 +7,52 @@
 
 #include <asm-generic/module.h>
 
-#ifdef CONFIG_ARM64_MODULE_PLTS
+#ifdef CONFIG_KVM
+struct pkvm_module_section {
+	void *start;
+	void *end;
+};
+
+typedef s32 kvm_nvhe_reloc_t;
+struct pkvm_module_ops;
+
+struct pkvm_el2_sym {
+	char			*name;
+	__le32 			*rela_pos;
+	struct list_head	node;
+};
+
+struct pkvm_el2_module {
+	struct pkvm_module_section text;
+	struct pkvm_module_section bss;
+	struct pkvm_module_section rodata;
+	struct pkvm_module_section data;
+	struct pkvm_module_section event_ids;
+	struct pkvm_module_section patchable_function_entries;
+	struct pkvm_module_section sections;
+	void *hyp_va;
+	struct hyp_event *hyp_events;
+	struct hyp_printk_fmt *hyp_printk_fmts;
+	unsigned int nr_hyp_events;
+	unsigned int nr_hyp_printk_fmts;
+	kvm_nvhe_reloc_t *relocs;
+	struct list_head node;
+	struct list_head ext_symbols;
+	unsigned int nr_relocs;
+	int (*init)(const struct pkvm_module_ops *ops);
+};
+
+void kvm_apply_hyp_module_relocations(struct pkvm_el2_module *mod,
+				      kvm_nvhe_reloc_t *begin,
+				      kvm_nvhe_reloc_t *end);
+
+#define ARM64_MODULE_KVM_ARCHDATA					\
+	/* For pKVM hypervisor modules */				\
+	struct pkvm_el2_module	hyp;
+#else
+#define ARM64_MODULE_KVM_ARCHDATA
+#endif
+
 struct mod_plt_sec {
 	int			plt_shndx;
 	int			plt_num_entries;
@@ -21,13 +66,8 @@ struct mod_arch_specific {
 	/* for CONFIG_DYNAMIC_FTRACE */
 	struct plt_entry	*ftrace_trampolines;
 
-	/* for FIPS 140 certified kernel module */
-	const Elf64_Rela	*text_relocations;
-	const Elf64_Rela	*rodata_relocations;
-	int			num_text_relocations;
-	int			num_rodata_relocations;
+	ARM64_MODULE_KVM_ARCHDATA
 };
-#endif
 
 u64 module_emit_plt_entry(struct module *mod, Elf64_Shdr *sechdrs,
 			  void *loc, const Elf64_Rela *rela,
@@ -35,12 +75,6 @@ u64 module_emit_plt_entry(struct module *mod, Elf64_Shdr *sechdrs,
 
 u64 module_emit_veneer_for_adrp(struct module *mod, Elf64_Shdr *sechdrs,
 				void *loc, u64 val);
-
-#ifdef CONFIG_RANDOMIZE_BASE
-extern u64 module_alloc_base;
-#else
-#define module_alloc_base	((u64)_etext - MODULES_VSIZE)
-#endif
 
 struct plt_entry {
 	/*
@@ -58,17 +92,25 @@ struct plt_entry {
 
 static inline bool is_forbidden_offset_for_adrp(void *place)
 {
-	return IS_ENABLED(CONFIG_ARM64_ERRATUM_843419) &&
-	       cpus_have_const_cap(ARM64_WORKAROUND_843419) &&
+	return cpus_have_final_cap(ARM64_WORKAROUND_843419) &&
 	       ((u64)place & 0xfff) >= 0xff8;
 }
 
 struct plt_entry get_plt_entry(u64 dst, void *pc);
-bool plt_entries_equal(const struct plt_entry *a, const struct plt_entry *b);
 
-static inline bool plt_entry_is_initialized(const struct plt_entry *e)
+static inline const Elf_Shdr *find_section(const Elf_Ehdr *hdr,
+				    const Elf_Shdr *sechdrs,
+				    const char *name)
 {
-	return e->adrp || e->add || e->br;
+	const Elf_Shdr *s, *se;
+	const char *secstrs = (void *)hdr + sechdrs[hdr->e_shstrndx].sh_offset;
+
+	for (s = sechdrs, se = sechdrs + hdr->e_shnum; s < se; s++) {
+		if (strcmp(name, secstrs + s->sh_name) == 0)
+			return s;
+	}
+
+	return NULL;
 }
 
 #endif /* __ASM_MODULE_H */

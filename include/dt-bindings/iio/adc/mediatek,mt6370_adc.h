@@ -1,7 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause */
-/*
- * Copyright (c) 2022 Mediatek Inc.
- */
 
 #ifndef __DT_BINDINGS_MEDIATEK_MT6370_ADC_H__
 #define __DT_BINDINGS_MEDIATEK_MT6370_ADC_H__

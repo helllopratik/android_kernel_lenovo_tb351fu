@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2022 Mediatek Inc.
+ * Copyright (C) 2022 Richtek Technology Corp.
  *
  * Author: ChiaEn Wu <chiaen_wu@richtek.com>
  */
@@ -240,10 +240,10 @@ static int mt6370_check_vendor_info(struct mt6370_priv *priv)
 {
 	/*
 	 * Because MT6372 uses 14 bits to control the brightness,
-	 * MT6370 and MT6371 use 11 bits.
-	 * This function is used to check the vendor's ID and
-	 * set the relative hardware mask, shift and
-	 * default maximum brightness value that should be used.
+	 * MT6370 and MT6371 use 11 bits. This function is used
+	 * to check the vendor's ID and set the relative hardware
+	 * mask, shift and default maximum brightness value that
+	 * should be used.
 	 */
 	unsigned int dev_info, hw_vid, of_vid;
 	int ret;
@@ -318,15 +318,13 @@ static int mt6370_bl_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int mt6370_bl_remove(struct platform_device *pdev)
+static void mt6370_bl_remove(struct platform_device *pdev)
 {
 	struct mt6370_priv *priv = platform_get_drvdata(pdev);
 	struct backlight_device *bl_dev = priv->bl;
 
 	bl_dev->props.brightness = 0;
 	backlight_update_status(priv->bl);
-
-	return 0;
 }
 
 static const struct of_device_id mt6370_bl_of_match[] = {
@@ -342,7 +340,7 @@ static struct platform_driver mt6370_bl_driver = {
 		.of_match_table = mt6370_bl_of_match,
 	},
 	.probe = mt6370_bl_probe,
-	.remove = mt6370_bl_remove,
+	.remove_new = mt6370_bl_remove,
 };
 module_platform_driver(mt6370_bl_driver);
 

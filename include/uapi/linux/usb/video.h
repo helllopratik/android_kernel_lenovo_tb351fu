@@ -104,6 +104,7 @@
 #define UVC_CT_ROLL_ABSOLUTE_CONTROL			0x0f
 #define UVC_CT_ROLL_RELATIVE_CONTROL			0x10
 #define UVC_CT_PRIVACY_CONTROL				0x11
+#define UVC_CT_REGION_OF_INTEREST_CONTROL		0x14
 
 /* A.9.5. Processing Unit Control Selectors */
 #define UVC_PU_CONTROL_UNDEFINED			0x00
@@ -496,7 +497,7 @@ struct uvc_format_uncompressed {
 	__u8  bDefaultFrameIndex;
 	__u8  bAspectRatioX;
 	__u8  bAspectRatioY;
-	__u8  bmInterfaceFlags;
+	__u8  bmInterlaceFlags;
 	__u8  bCopyProtect;
 } __attribute__((__packed__));
 
@@ -552,7 +553,7 @@ struct uvc_format_mjpeg {
 	__u8  bDefaultFrameIndex;
 	__u8  bAspectRatioX;
 	__u8  bAspectRatioY;
-	__u8  bmInterfaceFlags;
+	__u8  bmInterlaceFlags;
 	__u8  bCopyProtect;
 } __attribute__((__packed__));
 

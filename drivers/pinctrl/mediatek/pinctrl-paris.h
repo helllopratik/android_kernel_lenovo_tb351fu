@@ -26,8 +26,6 @@
 #include "mtk-eint.h"
 #include "pinctrl-mtk-common-v2.h"
 
-#define MTK_PINCTRL_DEV "pinctrl_mtk_v2"
-
 #define MTK_RANGE(_a)		{ .range = (_a), .nranges = ARRAY_SIZE(_a), }
 
 #define MTK_EINT_FUNCTION(_eintmux, _eintnum)				\
@@ -51,36 +49,13 @@
 			__VA_ARGS__, { } },				\
 	}
 
-#define MTK_PIN_NODRV(_number, _name, _eint, ...) {	\
-		.number = _number,			\
-		.name = _name,				\
-		.eint = _eint,				\
-		.funcs = (struct mtk_func_desc[]){	\
-			__VA_ARGS__, { } },		\
+#define PINCTRL_PIN_GROUP(_name_, id)							\
+	{										\
+		.grp = PINCTRL_PINGROUP(_name_,id##_pins, ARRAY_SIZE(id##_pins)),	\
+		.data = id##_funcs,							\
 	}
 
-#define MTK_PIN_EINT(_number, _eint) {			\
-		.number = _number,			\
-		.name = "GPIO"#_number,			\
-		.eint = MTK_EINT_FUNCTION(EINT_NO_GPIO, _eint),	\
-	}
-
-#define PINCTRL_PIN_GROUP(name, id)			\
-	{						\
-		name,					\
-		id##_pins,				\
-		ARRAY_SIZE(id##_pins),			\
-		id##_funcs,				\
-	}
-
-int mtk_paris_pinctrl_probe(struct platform_device *pdev,
-			    const struct mtk_pin_soc *soc);
-
-int mt63xx_pinctrl_probe(struct platform_device *pdev,
-			    const struct mtk_pin_soc *soc);
-
-int mt63xx_hw_set_value(struct mtk_pinctrl *hw, unsigned int pin,
-			int field, int value);
+int mtk_paris_pinctrl_probe(struct platform_device *pdev);
 
 ssize_t mtk_pctrl_show_one_pin(struct mtk_pinctrl *hw,
 	unsigned int gpio, char *buf, unsigned int bufLen);

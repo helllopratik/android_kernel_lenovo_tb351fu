@@ -10,7 +10,6 @@
 #include <linux/clkdev.h>
 #include <linux/spinlock.h>
 #include <linux/of.h>
-#include <linux/of_platform.h>
 #include <linux/of_address.h>
 
 #include <lantiq_soc.h>
@@ -248,6 +247,25 @@ static void pmu_disable(struct clk *clk)
 		pr_warn("deactivating PMU module failed!");
 }
 
+static void usb_set_clock(void)
+{
+	unsigned int val = ltq_cgu_r32(ifccr);
+
+	if (of_machine_is_compatible("lantiq,ar10") ||
+	    of_machine_is_compatible("lantiq,grx390")) {
+		val &= ~0x03; /* XTAL divided by 3 */
+	} else if (of_machine_is_compatible("lantiq,ar9") ||
+		   of_machine_is_compatible("lantiq,vr9")) {
+		/* TODO: this depends on the XTAL frequency */
+		val |= 0x03; /* XTAL divided by 3 */
+	} else if (of_machine_is_compatible("lantiq,ase")) {
+		val |= 0x20; /* from XTAL */
+	} else if (of_machine_is_compatible("lantiq,danube")) {
+		val |= 0x30; /* 12 MHz, generated from 36 MHz */
+	}
+	ltq_cgu_w32(val, ifccr);
+}
+
 /* the pci enable helper */
 static int pci_enable(struct clk *clk)
 {
@@ -441,6 +459,10 @@ void __init ltq_soc_init(void)
 			of_address_to_resource(np_ebu, 0, &res_ebu))
 		panic("Failed to get core resources");
 
+	of_node_put(np_pmu);
+	of_node_put(np_cgu);
+	of_node_put(np_ebu);
+
 	if (!request_mem_region(res_pmu.start, resource_size(&res_pmu),
 				res_pmu.name) ||
 		!request_mem_region(res_cgu.start, resource_size(&res_cgu),
@@ -585,4 +607,5 @@ void __init ltq_soc_init(void)
 		clkdev_add_pmu("1e116000.mei", "dfe", 1, 0, PMU_DFE);
 		clkdev_add_pmu("1e100400.serial", NULL, 1, 0, PMU_ASC0);
 	}
+	usb_set_clock();
 }

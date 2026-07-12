@@ -80,6 +80,7 @@ el1_trap:
 	b	__guest_exit
 
 el1_irq:
+el1_fiq:
 	get_vcpu_ptr	x1, x0
 	mov	x0, #ARM_EXCEPTION_IRQ
 	b	__guest_exit
@@ -135,7 +136,6 @@ SYM_CODE_END(\label)
 	invalid_vector	el2t_error_invalid
 	invalid_vector	el2h_irq_invalid
 	invalid_vector	el2h_fiq_invalid
-	invalid_vector	el1_fiq_invalid
 
 	.ltorg
 
@@ -154,6 +154,12 @@ SYM_CODE_END(\label)
 	esb
 	stp	x0, x1, [sp, #-16]!
 662:
+	/*
+	 * spectre vectors __bp_harden_hyp_vecs generate br instructions at runtime
+	 * that jump at offset 8 at __kvm_hyp_vector.
+	 * As hyp .text is guarded section, it needs bti j.
+	 */
+	bti j
 	b	\target
 
 check_preamble_length 661b, 662b
@@ -165,6 +171,8 @@ check_preamble_length 661b, 662b
 	nop
 	stp	x0, x1, [sp, #-16]!
 662:
+	/* Check valid_vect */
+	bti j
 	b	\target
 
 check_preamble_length 661b, 662b
@@ -183,12 +191,12 @@ SYM_CODE_START(__kvm_hyp_vector)
 
 	valid_vect	el1_sync		// Synchronous 64-bit EL1
 	valid_vect	el1_irq			// IRQ 64-bit EL1
-	invalid_vect	el1_fiq_invalid		// FIQ 64-bit EL1
+	valid_vect	el1_fiq			// FIQ 64-bit EL1
 	valid_vect	el1_error		// Error 64-bit EL1
 
 	valid_vect	el1_sync		// Synchronous 32-bit EL1
 	valid_vect	el1_irq			// IRQ 32-bit EL1
-	invalid_vect	el1_fiq_invalid		// FIQ 32-bit EL1
+	valid_vect	el1_fiq			// FIQ 32-bit EL1
 	valid_vect	el1_error		// Error 32-bit EL1
 SYM_CODE_END(__kvm_hyp_vector)
 
@@ -196,7 +204,7 @@ SYM_CODE_END(__kvm_hyp_vector)
 	sub	sp, sp, #(8 * 4)
 	stp	x2, x3, [sp, #(8 * 0)]
 	stp	x0, x1, [sp, #(8 * 2)]
-	alternative_cb spectre_bhb_patch_wa3
+	alternative_cb ARM64_ALWAYS_SYSTEM, spectre_bhb_patch_wa3
 	/* Patched to mov WA3 when supported */
 	mov	w0, #ARM_SMCCC_ARCH_WORKAROUND_1
 	alternative_cb_end
@@ -216,7 +224,7 @@ SYM_CODE_END(__kvm_hyp_vector)
 	mitigate_spectre_bhb_clear_insn
 	.endif
 	.if \indirect != 0
-	alternative_cb  kvm_patch_vector_branch
+	alternative_cb ARM64_ALWAYS_SYSTEM, kvm_patch_vector_branch
 	/*
 	 * For ARM64_SPECTRE_V3A configurations, these NOPs get replaced with:
 	 *
@@ -254,3 +262,48 @@ SYM_CODE_START(__bp_harden_hyp_vecs)
 1:	.org __bp_harden_hyp_vecs + __BP_HARDEN_HYP_VECS_SZ
 	.org 1b
 SYM_CODE_END(__bp_harden_hyp_vecs)
+
+#if defined(__KVM_NVHE_HYPERVISOR__) && defined(CONFIG_PROTECTED_NVHE_FTRACE)
+SYM_FUNC_START(__hyp_ftrace_tramp)
+	stp	x0,  x1,	[sp, #-16]!
+	stp	x2,  x3, 	[sp, #-16]!
+	stp	x4,  x5, 	[sp, #-16]!
+	stp	x6,  x7, 	[sp, #-16]!
+	stp	x8,  x29,	[sp, #-16]!	// x8, FP
+	stp	x30, xzr,	[sp, #-16]!	// LR, ALIGN(16)
+
+	sub	x0, x30, #AARCH64_INSN_SIZE 	// unsigned long ip
+	mov	x1, x9				// unsigned long parent_ip
+	mov	x2, x10				// unsigned long offset_idx
+	bl	__hyp_ftrace_trace
+	mov	x30, x0				// LR = __hyp_ftrace_trace();
+
+	ldp	x9,  xzr,	[sp], #16
+	ldp	x8,  x29,	[sp], #16
+	ldp	x6,  x7,	[sp], #16
+	ldp	x4,  x5,	[sp], #16
+	ldp	x2,  x3,	[sp], #16
+	ldp	x0,  x1,	[sp], #16
+
+	ret	x9
+SYM_FUNC_END(__hyp_ftrace_tramp)
+
+SYM_FUNC_START(__hyp_ftrace_ret_tramp)
+	stp	x0,  x1,	[sp, #-16]!
+	stp	x2,  x3, 	[sp, #-16]!
+	stp	x4,  x5, 	[sp, #-16]!
+	stp	x6,  x7, 	[sp, #-16]!
+	stp	x8,  x29,	[sp, #-16]!	// x8, FP
+
+	bl	__hyp_ftrace_ret_trace
+	mov	x30,  x0
+
+	ldp	x8,  x29,	[sp], #16	// x8, FP
+	ldp	x6,  x7,	[sp], #16
+	ldp	x4,  x5,	[sp], #16
+	ldp	x2,  x3,	[sp], #16
+	ldp	x0,  x1,	[sp], #16
+
+	ret
+SYM_FUNC_END(__hyp_ftrace_ret_tramp)
+#endif

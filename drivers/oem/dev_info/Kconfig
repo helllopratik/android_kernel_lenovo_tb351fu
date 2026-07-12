@@ -1,8 +1,0 @@
-menu "tinno drivers"
-
-config TINNO_DEVINFO
-    tristate "tinno_devinfo"
-    help
-      support tinno_devinfo
-
-endmenu

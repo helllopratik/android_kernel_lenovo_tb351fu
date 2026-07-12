@@ -1,15 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
 
-#include <linux/blk-mq.h>
 #include <linux/blk-pm.h>
 #include <linux/blkdev.h>
 #include <linux/pm_runtime.h>
 #include "blk-mq.h"
-#include "blk-mq-tag.h"
-
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-#include <trace/events/block.h>
-#endif
 
 /**
  * blk_pm_runtime_init - Block layer runtime PM initialization routine
@@ -71,10 +65,6 @@ int blk_pre_runtime_suspend(struct request_queue *q)
 
 	WARN_ON_ONCE(q->rpm_status != RPM_ACTIVE);
 
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	trace_blk_pre_runtime_suspend_start(q);
-#endif
-
 	spin_lock_irq(&q->queue_lock);
 	q->rpm_status = RPM_SUSPENDING;
 	spin_unlock_irq(&q->queue_lock);
@@ -110,10 +100,6 @@ int blk_pre_runtime_suspend(struct request_queue *q)
 		blk_clear_pm_only(q);
 	}
 
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	trace_blk_pre_runtime_suspend_end(q, ret);
-#endif
-
 	return ret;
 }
 EXPORT_SYMBOL(blk_pre_runtime_suspend);
@@ -136,10 +122,6 @@ void blk_post_runtime_suspend(struct request_queue *q, int err)
 	if (!q->dev)
 		return;
 
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	trace_blk_post_runtime_suspend_start(q, err);
-#endif
-
 	spin_lock_irq(&q->queue_lock);
 	if (!err) {
 		q->rpm_status = RPM_SUSPENDED;
@@ -151,10 +133,6 @@ void blk_post_runtime_suspend(struct request_queue *q, int err)
 
 	if (err)
 		blk_clear_pm_only(q);
-
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	trace_blk_post_runtime_suspend_end(q, err);
-#endif
 }
 EXPORT_SYMBOL(blk_post_runtime_suspend);
 
@@ -174,17 +152,9 @@ void blk_pre_runtime_resume(struct request_queue *q)
 	if (!q->dev)
 		return;
 
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	trace_blk_pre_runtime_resume_start(q);
-#endif
-
 	spin_lock_irq(&q->queue_lock);
 	q->rpm_status = RPM_RESUMING;
 	spin_unlock_irq(&q->queue_lock);
-
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	trace_blk_pre_runtime_resume_end(q);
-#endif
 }
 EXPORT_SYMBOL(blk_pre_runtime_resume);
 
@@ -193,57 +163,20 @@ EXPORT_SYMBOL(blk_pre_runtime_resume);
  * @q: the queue of the device
  *
  * Description:
- *    For historical reasons, this routine merely calls blk_set_runtime_active()
- *    to do the real work of restarting the queue.  It does this regardless of
- *    whether the device's runtime-resume succeeded; even if it failed the
+ *    Restart the queue of a runtime suspended device. It does this regardless
+ *    of whether the device's runtime-resume succeeded; even if it failed the
  *    driver or error handler will need to communicate with the device.
  *
  *    This function should be called near the end of the device's
- *    runtime_resume callback.
+ *    runtime_resume callback to correct queue runtime PM status and re-enable
+ *    peeking requests from the queue.
  */
 void blk_post_runtime_resume(struct request_queue *q)
-{
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	if (q->dev)
-		trace_blk_post_runtime_resume_start(q);
-#endif
-
-	blk_set_runtime_active(q);
-
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	if (q->dev)
-		trace_blk_post_runtime_resume_end(q);
-#endif
-}
-EXPORT_SYMBOL(blk_post_runtime_resume);
-
-/**
- * blk_set_runtime_active - Force runtime status of the queue to be active
- * @q: the queue of the device
- *
- * If the device is left runtime suspended during system suspend the resume
- * hook typically resumes the device and corrects runtime status
- * accordingly. However, that does not affect the queue runtime PM status
- * which is still "suspended". This prevents processing requests from the
- * queue.
- *
- * This function can be used in driver's resume hook to correct queue
- * runtime PM status and re-enable peeking requests from the queue. It
- * should be called before first request is added to the queue.
- *
- * This function is also called by blk_post_runtime_resume() for
- * runtime resumes.  It does everything necessary to restart the queue.
- */
-void blk_set_runtime_active(struct request_queue *q)
 {
 	int old_status;
 
 	if (!q->dev)
 		return;
-
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	trace_blk_set_runtime_active_start(q);
-#endif
 
 	spin_lock_irq(&q->queue_lock);
 	old_status = q->rpm_status;
@@ -254,9 +187,5 @@ void blk_set_runtime_active(struct request_queue *q)
 
 	if (old_status != RPM_ACTIVE)
 		blk_clear_pm_only(q);
-
-#if IS_ENABLED(CONFIG_MTK_BLOCK_IO_PM_DEBUG)
-	trace_blk_set_runtime_active_end(q);
-#endif
 }
-EXPORT_SYMBOL(blk_set_runtime_active);
+EXPORT_SYMBOL(blk_post_runtime_resume);

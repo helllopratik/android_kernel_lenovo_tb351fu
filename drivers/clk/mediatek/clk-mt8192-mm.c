@@ -1,10 +1,9 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 //
-// Copyright (c) 2020 MediaTek Inc.
-// Author: Weiyi Lu <weiyi.lu@mediatek.com>
+// Copyright (c) 2021 MediaTek Inc.
+// Author: Chun-Jie Chen <chun-jie.chen@mediatek.com>
 
 #include <linux/clk-provider.h>
-#include <linux/module.h>
 #include <linux/platform_device.h>
 
 #include "clk-mtk.h"
@@ -30,17 +29,14 @@ static const struct mtk_gate_regs mm2_cg_regs = {
 	.sta_ofs = 0x1a0,
 };
 
-#define GATE_MM0(_id, _name, _parent, _shift)			\
-	GATE_MTK(_id, _name, _parent, &mm0_cg_regs, _shift,	\
-		&mtk_clk_gate_ops_setclr)
+#define GATE_MM0(_id, _name, _parent, _shift)	\
+	GATE_MTK(_id, _name, _parent, &mm0_cg_regs, _shift, &mtk_clk_gate_ops_setclr)
 
-#define GATE_MM1(_id, _name, _parent, _shift)			\
-	GATE_MTK(_id, _name, _parent, &mm1_cg_regs, _shift,	\
-		&mtk_clk_gate_ops_setclr)
+#define GATE_MM1(_id, _name, _parent, _shift)	\
+	GATE_MTK(_id, _name, _parent, &mm1_cg_regs, _shift, &mtk_clk_gate_ops_setclr)
 
-#define GATE_MM2(_id, _name, _parent, _shift)			\
-	GATE_MTK(_id, _name, _parent, &mm2_cg_regs, _shift,	\
-		&mtk_clk_gate_ops_setclr)
+#define GATE_MM2(_id, _name, _parent, _shift)	\
+	GATE_MTK(_id, _name, _parent, &mm2_cg_regs, _shift, &mtk_clk_gate_ops_setclr)
 
 static const struct mtk_gate mm_clks[] = {
 	/* MM0 */
@@ -84,42 +80,26 @@ static const struct mtk_gate mm_clks[] = {
 	GATE_MM2(CLK_MM_32KHZ, "mm_32khz", "clk32k", 25),
 };
 
-static int clk_mt8192_mm_probe(struct platform_device *pdev)
-{
-	struct clk_onecell_data *clk_data;
-	struct device_node *node = pdev->dev.of_node;
-
-	clk_data = mtk_alloc_clk_data(CLK_MM_NR_CLK);
-
-	mtk_clk_register_gates(node, mm_clks, ARRAY_SIZE(mm_clks),
-			clk_data);
-
-	return of_clk_add_provider(node, of_clk_src_onecell_get, clk_data);
-}
-
-static const struct of_device_id of_match_clk_mt8192_mm[] = {
-	{ .compatible = "mediatek,mt8192-mmsys", },
-	{}
+static const struct mtk_clk_desc mm_desc = {
+	.clks = mm_clks,
+	.num_clks = ARRAY_SIZE(mm_clks),
 };
+
+static const struct platform_device_id clk_mt8192_mm_id_table[] = {
+	{ .name = "clk-mt8192-mm", .driver_data = (kernel_ulong_t)&mm_desc },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(platform, clk_mt8192_mm_id_table);
 
 static struct platform_driver clk_mt8192_mm_drv = {
-	.probe = clk_mt8192_mm_probe,
+	.probe = mtk_clk_pdev_probe,
+	.remove = mtk_clk_pdev_remove,
 	.driver = {
 		.name = "clk-mt8192-mm",
-		.of_match_table = of_match_clk_mt8192_mm,
 	},
+	.id_table = clk_mt8192_mm_id_table,
 };
+module_platform_driver(clk_mt8192_mm_drv);
 
-static int __init clk_mt8192_mm_init(void)
-{
-	return platform_driver_register(&clk_mt8192_mm_drv);
-}
-
-static void __exit clk_mt8192_mm_exit(void)
-{
-	platform_driver_unregister(&clk_mt8192_mm_drv);
-}
-
-arch_initcall(clk_mt8192_mm_init);
-module_exit(clk_mt8192_mm_exit);
+MODULE_DESCRIPTION("MediaTek MT8192 MultiMedia clocks driver");
 MODULE_LICENSE("GPL");

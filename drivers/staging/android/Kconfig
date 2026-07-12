@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: GPL-2.0
 menu "Android"
 
-if ANDROID
+config ANDROID_STAGING
+	bool
 
 config ASHMEM
 	bool "Enable the Anonymous Shared Memory Subsystem"
 	depends on SHMEM
+	select ANDROID_STAGING
 	help
 	  The ashmem subsystem is a new shared memory allocator, similar to
 	  POSIX SHM but with different behavior and sporting a simpler
@@ -14,19 +16,11 @@ config ASHMEM
 	  It is, in theory, a good memory allocator for low-memory devices,
 	  because it can discard shared memory units when under memory pressure.
 
-config DEBUG_KINFO
-	bool "Debug Kernel Information Support"
-	depends on KALLSYMS
-	help
-	  This supports kernel information backup for bootloader usage.
-	  Specifics:
-	   - The kallsyms symbols for unwind_backtrace
-	   - Page directory pointer
-	   - UTS_RELEASE
-	   - BUILD_INFO(ro.build.fingerprint)
+config ASHMEM_RUST
+	bool "Use the Rust implementation of Ashmem"
+	depends on ASHMEM && RUST
 
-source "drivers/staging/android/ion/Kconfig"
-
-endif # if ANDROID
+config ASHMEM_C
+	def_bool ASHMEM && !ASHMEM_RUST
 
 endmenu

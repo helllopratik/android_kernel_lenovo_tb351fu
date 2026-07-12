@@ -78,7 +78,7 @@ DEFINE_BINDER_FUNCTION_RETURN_EVENT(binder_read_done);
 
 TRACE_EVENT(binder_set_priority,
 	TP_PROTO(int proc, int thread, unsigned int old_prio,
-		 unsigned int desired_prio, unsigned int new_prio),
+		 unsigned int new_prio, unsigned int desired_prio),
 	TP_ARGS(proc, thread, old_prio, new_prio, desired_prio),
 
 	TP_STRUCT__entry(
@@ -117,6 +117,35 @@ TRACE_EVENT(binder_wait_for_work,
 	TP_printk("proc_work=%d transaction_stack=%d thread_todo=%d",
 		  __entry->proc_work, __entry->transaction_stack,
 		  __entry->thread_todo)
+);
+
+TRACE_EVENT(binder_txn_latency_free,
+	TP_PROTO(struct binder_transaction *t,
+		 int from_proc, int from_thread,
+		 int to_proc, int to_thread),
+	TP_ARGS(t, from_proc, from_thread, to_proc, to_thread),
+	TP_STRUCT__entry(
+		__field(int, debug_id)
+		__field(int, from_proc)
+		__field(int, from_thread)
+		__field(int, to_proc)
+		__field(int, to_thread)
+		__field(unsigned int, code)
+		__field(unsigned int, flags)
+	),
+	TP_fast_assign(
+		__entry->debug_id = t->debug_id;
+		__entry->from_proc = from_proc;
+		__entry->from_thread = from_thread;
+		__entry->to_proc = to_proc;
+		__entry->to_thread = to_thread;
+		__entry->code = t->code;
+		__entry->flags = t->flags;
+	),
+	TP_printk("transaction=%d from %d:%d to %d:%d flags=0x%x code=0x%x",
+		  __entry->debug_id, __entry->from_proc, __entry->from_thread,
+		  __entry->to_proc, __entry->to_thread, __entry->code,
+		  __entry->flags)
 );
 
 TRACE_EVENT(binder_transaction,
@@ -312,7 +341,7 @@ DEFINE_EVENT(binder_buffer_class, binder_transaction_update_buffer_release,
 
 TRACE_EVENT(binder_update_page_range,
 	TP_PROTO(struct binder_alloc *alloc, bool allocate,
-		 void __user *start, void __user *end),
+		 unsigned long start, unsigned long end),
 	TP_ARGS(alloc, allocate, start, end),
 	TP_STRUCT__entry(
 		__field(int, proc)

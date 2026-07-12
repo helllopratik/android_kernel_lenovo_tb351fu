@@ -1,254 +1,264 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2020 MediaTek Inc.
- * Author: Yu-Chang Wang <Yu-Chang.Wang@mediatek.com>
+ * Copyright (c) 2022 MediaTek Inc.
+ * Author: Edward-JW Yang <edward-jw.yang@mediatek.com>
  */
-#include <linux/device.h>
-#include <linux/module.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
-#include <linux/platform_device.h>
-#include <linux/string.h>
-#include <linux/list.h>
-#include <linux/spinlock.h>
-#include <linux/spinlock.h>
-#include <linux/slab.h>
-#include "clk-fhctl.h"
-#include "clk-fhctl-util.h"
-#include "clk-mtk.h"
 
-static int (*subsys_init[])(struct pll_dts *array) = {
-	&fhctl_ap_init,
-#if IS_ENABLED(CONFIG_COMMON_CLK_MTK_FREQ_HOPPING_SSPM)
-	&fhctl_sspm_init,
-#endif
-#ifdef USE_FHCTL_MCUPM
-	&fhctl_mcupm_init,
-#endif
-#ifdef USE_FHCTL_GPUEB
-	&fhctl_gpueb_init,
-#endif
-#if IS_ENABLED(CONFIG_DEBUG_FS)
-	&fhctl_debugfs_init,
-#endif
-	NULL,
+#include <linux/io.h>
+#include <linux/iopoll.h>
+
+#include "clk-mtk.h"
+#include "clk-pllfh.h"
+#include "clk-fhctl.h"
+
+#define PERCENT_TO_DDSLMT(dds, percent_m10) \
+	((((dds) * (percent_m10)) >> 5) / 100)
+
+static const struct fhctl_offset fhctl_offset_v1 = {
+	.offset_hp_en = 0x0,
+	.offset_clk_con = 0x4,
+	.offset_rst_con = 0x8,
+	.offset_slope0 = 0xc,
+	.offset_slope1 = 0x10,
+	.offset_cfg = 0x0,
+	.offset_updnlmt = 0x4,
+	.offset_dds = 0x8,
+	.offset_dvfs = 0xc,
+	.offset_mon = 0x10,
 };
 
-static bool _inited;
-static struct pll_dts *_array;
-static void set_dts_array(struct pll_dts *array) {_array = array; }
-static struct pll_dts *get_dts_array(void) {return _array; }
+static const struct fhctl_offset fhctl_offset_v2 = {
+	.offset_hp_en = 0x0,
+	.offset_clk_con = 0x8,
+	.offset_rst_con = 0xc,
+	.offset_slope0 = 0x10,
+	.offset_slope1 = 0x14,
+	.offset_cfg = 0x0,
+	.offset_updnlmt = 0x4,
+	.offset_dds = 0x8,
+	.offset_dvfs = 0xc,
+	.offset_mon = 0x10,
+};
 
-static bool _mtk_fh_set_rate(const char *pll_name, unsigned long dds, int postdiv)
+const struct fhctl_offset *fhctl_get_offset_table(enum fhctl_variant v)
 {
-	int i;
-	struct fh_hdlr *hdlr = NULL;
-	struct pll_dts *array = get_dts_array();
-	int num_pll = 0;
-
-	if (!array) {
-		FHDBG("!array\n");
-		return false;
-	}
-
-	num_pll = array->num_pll;
-
-	if (!_inited) {
-		FHDBG("!_inited\n");
-		return false;
-	}
-
-	if (!pll_name) {
-		FHDBG("pll_name is NULL");
-		return false;
-	}
-
-	for (i = 0; i < num_pll; i++, array++) {
-		if ((!strcmp(pll_name, array->pll_name))) {
-			hdlr = array->hdlr;
-			break;
-		}
-	}
-
-	if (hdlr && (array->perms & PERM_DRV_HOP)) {
-		hdlr->ops->hopping(hdlr->data,
-				array->domain,
-				array->fh_id,
-				dds, 9999);
-		return true;
-	}
-	return false;
+	switch (v) {
+	case FHCTL_PLLFH_V1:
+		return &fhctl_offset_v1;
+	case FHCTL_PLLFH_V2:
+		return &fhctl_offset_v2;
+	default:
+		return ERR_PTR(-EINVAL);
+	};
 }
 
-static struct pll_dts *parse_dt(struct platform_device *pdev)
+static void dump_hw(struct mtk_clk_pll *pll, struct fh_pll_regs *regs,
+		    const struct fh_pll_data *data)
 {
-	struct device_node *root, *map, *of_pll;
-	unsigned int num_pll = 0;
-	int iomap_idx = 0;
-	struct pll_dts *array;
-	int pll_idx = 0;
-	const struct of_device_id *match;
-	int size;
-
-	root = pdev->dev.of_node;
-	match = of_match_node(pdev->dev.driver->of_match_table, root);
-
-	/* iterate dts to get pll count */
-	for_each_child_of_node(root, map) {
-		for_each_child_of_node(map, of_pll) {
-			num_pll++;
-		}
-	}
-	FHDBG("num_pll<%d>\n", num_pll);
-
-	size = sizeof(*array)*num_pll;
-	array = kzalloc(size, GFP_KERNEL);
-	FHDBG("array<%lx>, num_pll<%d>, comp<%s>, sizeof(*array)=%d, size<%d>\n",
-			(unsigned long)array, num_pll,
-			match->compatible, sizeof(*array), size);
-	for_each_child_of_node(root, map) {
-		void __iomem *fhctl_base, *apmixed_base;
-		char *domain, *method;
-		int num;
-
-		fhctl_base = of_iomap(root, iomap_idx++);
-		apmixed_base = of_iomap(root, iomap_idx++);
-		of_property_read_string(map, "domain", (const char **)&domain);
-		of_property_read_string(map, "method", (const char **)&method);
-
-		num = 0;
-		FHDBG("---------------------\n");
-		for_each_child_of_node(map, of_pll) {
-			int fh_id, pll_id;
-			int perms, ssc_rate;
-
-			if (pll_idx >= num_pll) {
-				FHDBG("pll<%s> skipped\n",
-						of_pll->name);
-				pll_idx++;
-				continue;
-			}
-
-			/* default for optional field */
-			perms = 0xffffffff;
-			ssc_rate = 0;
-
-			of_property_read_u32(of_pll, "fh-id", &fh_id);
-			of_property_read_u32(of_pll, "pll-id", &pll_id);
-			of_property_read_u32(of_pll, "perms", &perms);
-			of_property_read_u32(of_pll, "ssc-rate", &ssc_rate);
-			array[pll_idx].num_pll = num_pll;
-			array[pll_idx].comp = (char *)match->compatible;
-			array[pll_idx].pll_name = (char *)of_pll->name;
-			array[pll_idx].fh_id = fh_id;
-			array[pll_idx].pll_id = pll_id;
-			array[pll_idx].perms = perms;
-			array[pll_idx].ssc_rate = ssc_rate;
-			array[pll_idx].domain = domain;
-			array[pll_idx].method = method;
-			array[pll_idx].fhctl_base = fhctl_base;
-			array[pll_idx].apmixed_base = apmixed_base;
-			num++;
-			pll_idx++;
-		}
-
-		FHDBG("domain<%s>, method<%s>\n", domain, method);
-		FHDBG("base<%lx,%lx>\n",
-				(unsigned long)fhctl_base, (unsigned long)apmixed_base);
-		FHDBG("num<%d>\n", num);
-		FHDBG("---------------------\n");
-	}
-
-	set_dts_array(array);
-
-	return array;
+	pr_info("hp_en<%x>,clk_con<%x>,slope0<%x>,slope1<%x>\n",
+		readl(regs->reg_hp_en), readl(regs->reg_clk_con),
+		readl(regs->reg_slope0), readl(regs->reg_slope1));
+	pr_info("cfg<%x>,lmt<%x>,dds<%x>,dvfs<%x>,mon<%x>\n",
+		readl(regs->reg_cfg), readl(regs->reg_updnlmt),
+		readl(regs->reg_dds), readl(regs->reg_dvfs),
+		readl(regs->reg_mon));
+	pr_info("pcw<%x>\n", readl(pll->pcw_addr));
 }
 
-static int fh_plt_drv_probe(struct platform_device *pdev)
+static int fhctl_set_ssc_regs(struct mtk_clk_pll *pll, struct fh_pll_regs *regs,
+			      const struct fh_pll_data *data, u32 rate)
 {
-	int i;
-	int num_pll;
-	struct pll_dts *array;
-	int (**init_call)(struct pll_dts *) = subsys_init;
+	u32 updnlmt_val, r;
 
-	FHDBG("in\n");
+	writel((readl(regs->reg_cfg) & ~(data->frddsx_en)), regs->reg_cfg);
+	writel((readl(regs->reg_cfg) & ~(data->sfstrx_en)), regs->reg_cfg);
+	writel((readl(regs->reg_cfg) & ~(data->fhctlx_en)), regs->reg_cfg);
 
-	/* convert dt to data */
-	array = parse_dt(pdev);
+	if (rate > 0) {
+		/* Set the relative parameter registers (dt/df/upbnd/downbnd) */
+		r = readl(regs->reg_cfg);
+		r &= ~(data->msk_frddsx_dys);
+		r |= (data->df_val << (ffs(data->msk_frddsx_dys) - 1));
+		writel(r, regs->reg_cfg);
 
-	/* init every subsys */
-	while (*init_call != NULL) {
-		(*init_call)(array);
-		init_call++;
+		r = readl(regs->reg_cfg);
+		r &= ~(data->msk_frddsx_dts);
+		r |= (data->dt_val << (ffs(data->msk_frddsx_dts) - 1));
+		writel(r, regs->reg_cfg);
+
+		writel((readl(pll->pcw_addr) & data->dds_mask) | data->tgl_org,
+			regs->reg_dds);
+
+		/* Calculate UPDNLMT */
+		updnlmt_val = PERCENT_TO_DDSLMT((readl(regs->reg_dds) &
+						 data->dds_mask), rate) <<
+						 data->updnlmt_shft;
+
+		writel(updnlmt_val, regs->reg_updnlmt);
+		writel(readl(regs->reg_hp_en) | BIT(data->fh_id),
+		       regs->reg_hp_en);
+		/* Enable SSC */
+		writel(readl(regs->reg_cfg) | data->frddsx_en, regs->reg_cfg);
+		/* Enable Hopping control */
+		writel(readl(regs->reg_cfg) | data->fhctlx_en, regs->reg_cfg);
+
+	} else {
+		/* Switch to APMIXEDSYS control */
+		writel(readl(regs->reg_hp_en) & ~BIT(data->fh_id),
+		       regs->reg_hp_en);
+		/* Wait for DDS to be stable */
+		udelay(30);
 	}
 
-	/* make sure array is complete */
-	num_pll = array->num_pll;
-	for (i = 0; i < num_pll; i++, array++) {
-		struct fh_hdlr *hdlr = array->hdlr;
-
-		if (!hdlr) {
-			FHDBG("hdlr is NULL!!! <%s,%s,%s>\n",
-					array->pll_name,
-					array->domain,
-					array->method);
-			return -1;
-		}
-	}
-
-	/* set _inited is the last step */
-	mb();
-	_inited = true;
-	mtk_fh_set_rate = _mtk_fh_set_rate;
 	return 0;
 }
 
-static int fh_plt_drv_remove(struct platform_device *pdev) {return 0; }
-
-static void fh_plt_drv_shutdown(struct platform_device *pdev)
+static int hopping_hw_flow(struct mtk_clk_pll *pll, struct fh_pll_regs *regs,
+			   const struct fh_pll_data *data,
+			   struct fh_pll_state *state, unsigned int new_dds)
 {
-	struct pll_dts *array = get_dts_array();
-	int num_pll = array->num_pll;
-	int i;
+	u32 dds_mask = data->dds_mask;
+	u32 mon_dds = 0;
+	u32 con_pcw_tmp;
+	int ret;
 
-	for (i = 0; i < num_pll; i++, array++) {
-		struct fh_hdlr *hdlr = array->hdlr;
+	if (state->ssc_rate)
+		fhctl_set_ssc_regs(pll, regs, data, 0);
 
-		if (array->ssc_rate)
-			hdlr->ops->ssc_disable(hdlr->data,
-					array->domain,
-					array->fh_id);
+	writel((readl(pll->pcw_addr) & dds_mask) | data->tgl_org,
+		regs->reg_dds);
+
+	writel(readl(regs->reg_cfg) | data->sfstrx_en, regs->reg_cfg);
+	writel(readl(regs->reg_cfg) | data->fhctlx_en, regs->reg_cfg);
+	writel(data->slope0_value, regs->reg_slope0);
+	writel(data->slope1_value, regs->reg_slope1);
+
+	writel(readl(regs->reg_hp_en) | BIT(data->fh_id), regs->reg_hp_en);
+	writel((new_dds) | (data->dvfs_tri), regs->reg_dvfs);
+
+	/* Wait 1000 us until DDS stable */
+	ret = readl_poll_timeout_atomic(regs->reg_mon, mon_dds,
+				       (mon_dds & dds_mask) == new_dds,
+					10, 1000);
+	if (ret) {
+		pr_warn("%s: FHCTL hopping timeout\n", pll->data->name);
+		dump_hw(pll, regs, data);
 	}
+
+	con_pcw_tmp = readl(pll->pcw_addr) & (~dds_mask);
+	con_pcw_tmp = (con_pcw_tmp | (readl(regs->reg_mon) & dds_mask) |
+		       data->pcwchg);
+
+	writel(con_pcw_tmp, pll->pcw_addr);
+	writel(readl(regs->reg_hp_en) & ~BIT(data->fh_id), regs->reg_hp_en);
+
+	if (state->ssc_rate)
+		fhctl_set_ssc_regs(pll, regs, data, state->ssc_rate);
+
+	return ret;
 }
 
-static const struct of_device_id fh_of_match[] = {
-	{ .compatible = "mediatek,mt6765-fhctl"},
-	{ .compatible = "mediatek,mt6739-fhctl"},
-	{ .compatible = "mediatek,mt6761-fhctl"},
-	{ .compatible = "mediatek,mt6768-fhctl"},
-	{ .compatible = "mediatek,mt6853-fhctl"},
-	{ .compatible = "mediatek,mt6855-fhctl"},
-	{ .compatible = "mediatek,mt6877-fhctl"},
-	{ .compatible = "mediatek,mt6873-fhctl"},
-	{ .compatible = "mediatek,mt6879-fhctl"},
-	{ .compatible = "mediatek,mt6885-fhctl"},
-	{ .compatible = "mediatek,mt6895-fhctl"},
-	{ .compatible = "mediatek,mt6983-fhctl"},
-	{}
+static unsigned int __get_postdiv(struct mtk_clk_pll *pll)
+{
+	unsigned int regval;
+
+	regval = readl(pll->pd_addr) >> pll->data->pd_shift;
+	regval &= POSTDIV_MASK;
+
+	return BIT(regval);
+}
+
+static void __set_postdiv(struct mtk_clk_pll *pll, unsigned int postdiv)
+{
+	unsigned int regval;
+
+	regval = readl(pll->pd_addr);
+	regval &= ~(POSTDIV_MASK << pll->data->pd_shift);
+	regval |= (ffs(postdiv) - 1) << pll->data->pd_shift;
+	writel(regval, pll->pd_addr);
+}
+
+static int fhctl_hopping(struct mtk_fh *fh, unsigned int new_dds,
+			 unsigned int postdiv)
+{
+	const struct fh_pll_data *data = &fh->pllfh_data->data;
+	struct fh_pll_state *state = &fh->pllfh_data->state;
+	struct fh_pll_regs *regs = &fh->regs;
+	struct mtk_clk_pll *pll = &fh->clk_pll;
+	spinlock_t *lock = fh->lock;
+	unsigned int pll_postdiv;
+	unsigned long flags = 0;
+	int ret;
+
+	if (postdiv) {
+		pll_postdiv = __get_postdiv(pll);
+
+		if (postdiv > pll_postdiv)
+			__set_postdiv(pll, postdiv);
+	}
+
+	spin_lock_irqsave(lock, flags);
+
+	ret = hopping_hw_flow(pll, regs, data, state, new_dds);
+
+	spin_unlock_irqrestore(lock, flags);
+
+	if (postdiv && postdiv < pll_postdiv)
+		__set_postdiv(pll, postdiv);
+
+	return ret;
+}
+
+static int fhctl_ssc_enable(struct mtk_fh *fh, u32 rate)
+{
+	const struct fh_pll_data *data = &fh->pllfh_data->data;
+	struct fh_pll_state *state = &fh->pllfh_data->state;
+	struct fh_pll_regs *regs = &fh->regs;
+	struct mtk_clk_pll *pll = &fh->clk_pll;
+	spinlock_t *lock = fh->lock;
+	unsigned long flags = 0;
+
+	spin_lock_irqsave(lock, flags);
+
+	fhctl_set_ssc_regs(pll, regs, data, rate);
+	state->ssc_rate = rate;
+
+	spin_unlock_irqrestore(lock, flags);
+
+	return 0;
+}
+
+static const struct fh_operation fhctl_ops = {
+	.hopping = fhctl_hopping,
+	.ssc_enable = fhctl_ssc_enable,
 };
 
-static struct platform_driver fhctl_driver = {
-	.probe = fh_plt_drv_probe,
-	.remove = fh_plt_drv_remove,
-	.shutdown = fh_plt_drv_shutdown,
-	.driver = {
-		.name = "fhctl",
-		.owner = THIS_MODULE,
-		.of_match_table = fh_of_match,
-	},
-};
-module_platform_driver(fhctl_driver);
-MODULE_LICENSE("GPL v2");
-MODULE_DESCRIPTION("MediaTek FHCTL Driver");
-MODULE_AUTHOR("Kuan-Hsin Lee <kuan-hsin.lee@mediatek.com>");
+const struct fh_operation *fhctl_get_ops(void)
+{
+	return &fhctl_ops;
+}
+
+void fhctl_hw_init(struct mtk_fh *fh)
+{
+	const struct fh_pll_data data = fh->pllfh_data->data;
+	struct fh_pll_state state = fh->pllfh_data->state;
+	struct fh_pll_regs regs = fh->regs;
+	u32 val;
+
+	/* initial hw register */
+	val = readl(regs.reg_clk_con) | BIT(data.fh_id);
+	writel(val, regs.reg_clk_con);
+
+	val = readl(regs.reg_rst_con) & ~BIT(data.fh_id);
+	writel(val, regs.reg_rst_con);
+	val = readl(regs.reg_rst_con) | BIT(data.fh_id);
+	writel(val, regs.reg_rst_con);
+
+	writel(0x0, regs.reg_cfg);
+	writel(0x0, regs.reg_updnlmt);
+	writel(0x0, regs.reg_dds);
+
+	/* enable ssc if needed */
+	if (state.ssc_rate)
+		fh->ops->ssc_enable(fh, state.ssc_rate);
+}

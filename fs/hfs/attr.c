@@ -115,12 +115,13 @@ out:
 
 static int hfs_xattr_get(const struct xattr_handler *handler,
 			 struct dentry *unused, struct inode *inode,
-			 const char *name, void *value, size_t size, int flags)
+			 const char *name, void *value, size_t size)
 {
 	return __hfs_getxattr(inode, handler->flags, value, size);
 }
 
 static int hfs_xattr_set(const struct xattr_handler *handler,
+			 struct mnt_idmap *idmap,
 			 struct dentry *unused, struct inode *inode,
 			 const char *name, const void *value, size_t size,
 			 int flags)
@@ -145,7 +146,7 @@ static const struct xattr_handler hfs_type_handler = {
 	.set = hfs_xattr_set,
 };
 
-const struct xattr_handler *hfs_xattr_handlers[] = {
+const struct xattr_handler * const hfs_xattr_handlers[] = {
 	&hfs_creator_handler,
 	&hfs_type_handler,
 	NULL

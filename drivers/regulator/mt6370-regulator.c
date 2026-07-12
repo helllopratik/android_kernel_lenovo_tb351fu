@@ -1,9 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0+
-/*
- * Copyright (C) 2022 Mediatek Technology Corp.
- *
- * Author: ChiYuan Huang <cy_huang@richtek.com>
- */
 
 #include <linux/bits.h>
 #include <linux/gpio/consumer.h>
@@ -119,131 +114,12 @@ static int mt6370_get_error_flags(struct regulator_dev *rdev,
 	return 0;
 }
 
-static int find_closest_bigger(unsigned int target, const unsigned int *table,
-			       unsigned int num_sel, unsigned int *sel)
-{
-	unsigned int s, tmp, max, maxsel = 0;
-	bool found = false;
-
-	max = table[0];
-
-	for (s = 0; s < num_sel; s++) {
-		if (table[s] > max) {
-			max = table[s];
-			maxsel = s;
-		}
-		if (table[s] >= target) {
-			if (!found || table[s] - target < tmp - target) {
-				tmp = table[s];
-				*sel = s;
-				found = true;
-				if (tmp == target)
-					break;
-			}
-		}
-	}
-
-	if (!found) {
-		*sel = maxsel;
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-/**
- * mt6370_regulator_set_ramp_delay_regmap - set_ramp_delay() helper
- *
- * @rdev: regulator to operate on
- *
- * Regulators that use regmap for their register I/O can set the ramp_reg
- * and ramp_mask fields in their descriptor and then use this as their
- * set_ramp_delay operation, saving some code.
- */
-static int mt6370_regulator_set_ramp_delay_regmap(struct regulator_dev *rdev,
-						  int ramp_delay)
-{
-	int ret;
-	unsigned int sel;
-	unsigned int ramp_reg;
-	unsigned int ramp_mask;
-	const unsigned int *ramp_delay_table;
-	unsigned int n_ramp_values;
-
-	switch (rdev->desc->id) {
-	case MT6370_IDX_DSVPOS:
-		ramp_reg = MT6370_REG_DB_VPOS;
-		ramp_mask = MT6370_DBSLEW_MASK;
-		ramp_delay_table = mt6370_vpos_ramp_tbl;
-		n_ramp_values = ARRAY_SIZE(mt6370_vpos_ramp_tbl);
-		break;
-	case MT6370_IDX_DSVNEG:
-		ramp_reg = MT6370_REG_DB_VNEG;
-		ramp_mask = MT6370_DBSLEW_MASK;
-		ramp_delay_table = mt6370_vneg_ramp_tbl;
-		n_ramp_values = ARRAY_SIZE(mt6370_vneg_ramp_tbl);
-		break;
-	default:
-		pr_notice("%s invalid regulator id\n", __func__);
-		return 0;
-	};
-
-	ret = find_closest_bigger(ramp_delay, ramp_delay_table, n_ramp_values,
-				  &sel);
-
-	if (ret) {
-		dev_warn(rdev_get_dev(rdev),
-			 "Can't set ramp-delay %u, setting %u\n", ramp_delay,
-			 ramp_delay_table[sel]);
-	}
-
-	sel <<= ffs(ramp_mask) - 1;
-
-	return regmap_update_bits(rdev->regmap, ramp_reg, ramp_mask, sel);
-}
-
-/*
- * to avoid ABI Issue, add static function
- */
-static int mt6370_regulator_set_bypass_regmap(struct regulator_dev *rdev, bool enable)
-{
-	unsigned int val;
-
-	if (enable) {
-		val = rdev->desc->bypass_val_on;
-		if (!val)
-			val = rdev->desc->bypass_mask;
-	} else {
-		val = rdev->desc->bypass_val_off;
-	}
-
-	return regmap_update_bits(rdev->regmap, rdev->desc->bypass_reg,
-				  rdev->desc->bypass_mask, val);
-}
-
-static int mt6370_regulator_get_bypass_regmap(struct regulator_dev *rdev, bool *enable)
-{
-	unsigned int val;
-	unsigned int val_on = rdev->desc->bypass_val_on;
-	int ret;
-
-	ret = regmap_read(rdev->regmap, rdev->desc->bypass_reg, &val);
-	if (ret != 0)
-		return ret;
-
-	if (!val_on)
-		val_on = rdev->desc->bypass_mask;
-
-	*enable = (val & rdev->desc->bypass_mask) == val_on;
-
-	return 0;
-}
 static const struct regulator_ops mt6370_dbvboost_ops = {
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
 	.set_voltage_sel = regulator_set_voltage_sel_regmap,
 	.list_voltage = regulator_list_voltage_linear,
-	.get_bypass = mt6370_regulator_get_bypass_regmap,
-	.set_bypass = mt6370_regulator_set_bypass_regmap,
+	.get_bypass = regulator_get_bypass_regmap,
+	.set_bypass = regulator_set_bypass_regmap,
 	.get_error_flags = mt6370_get_error_flags,
 };
 
@@ -255,7 +131,7 @@ static const struct regulator_ops mt6370_dbvout_ops = {
 	.enable = regulator_enable_regmap,
 	.disable = regulator_disable_regmap,
 	.set_active_discharge = regulator_set_active_discharge_regmap,
-	.set_ramp_delay = mt6370_regulator_set_ramp_delay_regmap,
+	.set_ramp_delay = regulator_set_ramp_delay_regmap,
 	.get_error_flags = mt6370_get_error_flags,
 };
 
@@ -338,6 +214,10 @@ static const struct regulator_desc mt6370_regulator_descs[] = {
 		.vsel_mask = MT6370_DBVOUT_MASK,
 		.enable_reg = MT6370_REG_DB_CTRL2,
 		.enable_mask = MT6370_DBVPOSEN_MASK,
+		.ramp_reg = MT6370_REG_DB_VPOS,
+		.ramp_mask = MT6370_DBSLEW_MASK,
+		.ramp_delay_table = mt6370_vpos_ramp_tbl,
+		.n_ramp_values = ARRAY_SIZE(mt6370_vpos_ramp_tbl),
 		.active_discharge_reg = MT6370_REG_DB_CTRL2,
 		.active_discharge_mask = MT6370_DBVPOSDISG_MASK,
 		.active_discharge_on = MT6370_DBVPOSDISG_MASK,
@@ -358,6 +238,10 @@ static const struct regulator_desc mt6370_regulator_descs[] = {
 		.vsel_mask = MT6370_DBVOUT_MASK,
 		.enable_reg = MT6370_REG_DB_CTRL2,
 		.enable_mask = MT6370_DBVNEGEN_MASK,
+		.ramp_reg = MT6370_REG_DB_VNEG,
+		.ramp_mask = MT6370_DBSLEW_MASK,
+		.ramp_delay_table = mt6370_vneg_ramp_tbl,
+		.n_ramp_values = ARRAY_SIZE(mt6370_vneg_ramp_tbl),
 		.active_discharge_reg = MT6370_REG_DB_CTRL2,
 		.active_discharge_mask = MT6370_DBVNEGDISG_MASK,
 		.active_discharge_on = MT6370_DBVNEGDISG_MASK,
@@ -495,6 +379,7 @@ MODULE_DEVICE_TABLE(platform, mt6370_devid_table);
 static struct platform_driver mt6370_regulator_driver = {
 	.driver = {
 		.name = "mt6370-regulator",
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 	.id_table = mt6370_devid_table,
 	.probe = mt6370_regulator_probe,

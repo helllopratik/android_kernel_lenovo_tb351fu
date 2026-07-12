@@ -204,7 +204,7 @@ static int squashfs_xattr_handler_get(const struct xattr_handler *handler,
 				      struct dentry *unused,
 				      struct inode *inode,
 				      const char *name,
-				      void *buffer, size_t size, int flags)
+				      void *buffer, size_t size)
 {
 	return squashfs_xattr_get(inode, handler->flags, name,
 		buffer, size);
@@ -262,7 +262,7 @@ static const struct xattr_handler *squashfs_xattr_handler(int type)
 	}
 }
 
-const struct xattr_handler *squashfs_xattr_handlers[] = {
+const struct xattr_handler * const squashfs_xattr_handlers[] = {
 	&squashfs_xattr_user_handler,
 	&squashfs_xattr_trusted_handler,
 	&squashfs_xattr_security_handler,

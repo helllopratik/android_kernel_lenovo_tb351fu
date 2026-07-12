@@ -7,6 +7,11 @@ ARM
 .. toctree::
    :maxdepth: 2
 
+   fw-pseudo-registers
    hyp-abi
-   psci
+   hypercalls
+   pkvm
    pvtime
+   ptp_kvm
+   vcpu-features
+   mmio-guard

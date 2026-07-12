@@ -18,7 +18,7 @@
 #include <linux/irq.h>
 #include <linux/irqchip/chained_irq.h>
 #include <linux/irqdomain.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/of_graph.h>
 
 #include <drm/drm_fourcc.h>
@@ -1003,19 +1003,16 @@ err_cpmem:
 static void ipu_irq_handle(struct ipu_soc *ipu, const int *regs, int num_regs)
 {
 	unsigned long status;
-	int i, bit, irq;
+	int i, bit;
 
 	for (i = 0; i < num_regs; i++) {
 
 		status = ipu_cm_read(ipu, IPU_INT_STAT(regs[i]));
 		status &= ipu_cm_read(ipu, IPU_INT_CTRL(regs[i]));
 
-		for_each_set_bit(bit, &status, 32) {
-			irq = irq_linear_revmap(ipu->domain,
-						regs[i] * 32 + bit);
-			if (irq)
-				generic_handle_irq(irq);
-		}
+		for_each_set_bit(bit, &status, 32)
+			generic_handle_domain_irq(ipu->domain,
+						  regs[i] * 32 + bit);
 	}
 }
 
@@ -1453,7 +1450,7 @@ out_failed_reset:
 	return ret;
 }
 
-static int ipu_remove(struct platform_device *pdev)
+static void ipu_remove(struct platform_device *pdev)
 {
 	struct ipu_soc *ipu = platform_get_drvdata(pdev);
 
@@ -1462,8 +1459,6 @@ static int ipu_remove(struct platform_device *pdev)
 	ipu_irq_exit(ipu);
 
 	clk_disable_unprepare(ipu->clk);
-
-	return 0;
 }
 
 static struct platform_driver imx_ipu_driver = {
@@ -1472,7 +1467,7 @@ static struct platform_driver imx_ipu_driver = {
 		.of_match_table = imx_ipu_dt_ids,
 	},
 	.probe = ipu_probe,
-	.remove = ipu_remove,
+	.remove_new = ipu_remove,
 };
 
 static struct platform_driver * const drivers[] = {

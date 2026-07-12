@@ -1,412 +1,308 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2022 MediaTek Inc.
+ * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Linaro Limited
  */
-
-#include <linux/module.h>
-#include <linux/param.h>
-#include <linux/jiffies.h>
-#include <linux/workqueue.h>
 #include <linux/delay.h>
-#include <linux/platform_device.h>
-#include <linux/power_supply.h>
-#include <linux/idr.h>
 #include <linux/i2c.h>
-#include <linux/slab.h>
-#include <asm/unaligned.h>
-#include "mtk_battery.h"
+#include <linux/power_supply.h>
+#include <linux/regmap.h>
 
-#define DRIVER_VERSION			"1.0.0"
-#define REG_CTRL_0			0x00
+#define REG_BATID			0x00 /* This one is very unclear */
+ #define BATID_101			0x0101 /* 107kOhm */
+ #define BATID_102			0x0102 /* 10kOhm */
 #define REG_TEMPERATURE			0x06
 #define REG_VOLTAGE			0x08
-#define REG_CURRENT			0x14
-#define REG_RSOC			0x2c
-#define REG_BLOCKDATAOFFSET		0x3e
-#define REG_BLOCKDATA			0x40
-#define BATTERY_QMAX			7500
-#define BATTERY_CV			4350
+#define REG_FLAGS			0x0a
+ #define MM8013_FLAG_OTC		BIT(15)
+ #define MM8013_FLAG_OTD		BIT(14)
+ #define MM8013_FLAG_BATHI		BIT(13)
+ #define MM8013_FLAG_BATLOW		BIT(12)
+ #define MM8013_FLAG_CHG_INH		BIT(11)
+ #define MM8013_FLAG_FC			BIT(9)
+ #define MM8013_FLAG_CHG		BIT(8)
+ #define MM8013_FLAG_OCC		BIT(6)
+ #define MM8013_FLAG_ODC		BIT(5)
+ #define MM8013_FLAG_OT			BIT(4)
+ #define MM8013_FLAG_UT			BIT(3)
+ #define MM8013_FLAG_DSG		BIT(0)
+#define REG_FULL_CHARGE_CAPACITY	0x0e
+#define REG_NOMINAL_CHARGE_CAPACITY	0x0c
+#define REG_AVERAGE_CURRENT		0x14
+#define REG_AVERAGE_TIME_TO_EMPTY	0x16
+#define REG_AVERAGE_TIME_TO_FULL	0x18
+#define REG_MAX_LOAD_CURRENT		0x1e
+#define REG_CYCLE_COUNT			0x2a
+#define REG_STATE_OF_CHARGE		0x2c
+#define REG_DESIGN_CAPACITY		0x3c
+/* TODO: 0x62-0x68 seem to contain 'MM8013C' in a length-prefixed, non-terminated string */
 
-#define MM8013C_DEFAULT_SOC_VALUE		51
-#define MM8013C_DEFAULT_TEMP_VALUE		260
-#define MM8013C_DEFAULT_VOLAGE_VALUE		3900
-#define MM8013C_DEFAULT_CURRENT_VALUE		500
-
-struct battery_info {
-	int status;
-	int health;
-	int present;
-	int technology;
-	int cycle_count;
-	int capacity;
-	int current_now;
-	int current_avg;
-	int voltage_now;
-	int charger_full;
-	int charger_counter;
-	int battery_temp;
-	int capacoty_level;
-	int time_to_full_now;
-	int charger_full_design;
-	int constant_charge_voltage;
-};
+#define DECIKELVIN_TO_DECIDEGC(t)	(t - 2731)
 
 struct mm8013_chip {
-	struct device *dev;
 	struct i2c_client *client;
-	struct power_supply_desc battery;
-	struct power_supply *mm8013_psy;
-	struct power_supply *chg_psy;
-	struct battery_info bat_data;
-	struct delayed_work work;
-	bool is_probe_done;
+	struct regmap *regmap;
 };
 
-struct mm8013_chip *chip;
-bool has_8013;
-
-static int mm8013_read_reg(struct i2c_client *client, u8 reg)
+static int mm8013_checkdevice(struct mm8013_chip *chip)
 {
-	int ret = 0;
+	int battery_id, ret;
+	u32 val;
 
-	if (client == NULL) {
-		pr_info("%s:client is NULL!!\n", __func__);
-
-		return -1;
-	}
-	ret = i2c_smbus_read_word_data(client, reg);
-
+	ret = regmap_write(chip->regmap, REG_BATID, 0x0008);
 	if (ret < 0)
-		dev_info(&client->dev, "%s: err %d\n", __func__, ret);
-	msleep(20);
+		return ret;
 
-	return ret;
-}
+	ret = regmap_read(chip->regmap, REG_BATID, &val);
+	if (ret < 0)
+		return ret;
 
-int mm8013_soc(int *val)
-{
-	int soc = 0;
+	if (val == BATID_102)
+		battery_id = 2;
+	else if (val == BATID_101)
+		battery_id = 1;
+	else
+		return -EINVAL;
 
-	if (has_8013) {
-		soc = mm8013_read_reg(chip->client, REG_RSOC);
-		*val = soc;
-	} else {
-		*val =	MM8013C_DEFAULT_SOC_VALUE;
-	}
+	dev_dbg(&chip->client->dev, "battery_id: %d\n", battery_id);
 
 	return 0;
-}
-EXPORT_SYMBOL(mm8013_soc);
-
-int mm8013_voltage(int *val)
-{
-	int volt = 0;
-
-	if (has_8013) {
-		volt = mm8013_read_reg(chip->client, REG_VOLTAGE);
-		*val = volt;
-	} else {
-		*val = MM8013C_DEFAULT_VOLAGE_VALUE;
-	}
-
-	return 0;
-}
-EXPORT_SYMBOL(mm8013_voltage);
-
-int mm8013_current(int *val)
-{
-	int curr = 0;
-
-	if (has_8013) {
-		curr = mm8013_read_reg(chip->client, REG_CURRENT);
-		if (curr > 32767)
-			curr -= 65536;
-		*val = curr;
-	} else {
-		*val =	MM8013C_DEFAULT_CURRENT_VALUE;
-	}
-
-	return 0;
-}
-EXPORT_SYMBOL(mm8013_current);
-
-int mm8013_temperature(int *val)
-{
-	int temp = 0;
-
-	if (has_8013) {
-		temp = mm8013_read_reg(chip->client, REG_TEMPERATURE);
-		*val = temp - 2731;
-	} else
-		*val =	MM8013C_DEFAULT_TEMP_VALUE;
-
-	return 0;
-}
-EXPORT_SYMBOL(mm8013_temperature);
-
-static int mm8013_checkdevice(void)
-{
-	int ret = 0;
-	int count = 3;
-
-	while (count--) {
-		ret = mm8013_read_reg(chip->client, REG_CTRL_0);
-		if (ret > 0)
-			break;
-	}
-
-	return ret;
 }
 
 static enum power_supply_property mm8013_battery_props[] = {
-	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CHARGE_NOW,
+	POWER_SUPPLY_PROP_CURRENT_MAX,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_PRESENT,
-	POWER_SUPPLY_PROP_TECHNOLOGY,
-	POWER_SUPPLY_PROP_CYCLE_COUNT,
-	POWER_SUPPLY_PROP_CAPACITY,
-	POWER_SUPPLY_PROP_CURRENT_NOW,
-	POWER_SUPPLY_PROP_CURRENT_AVG,
-	POWER_SUPPLY_PROP_VOLTAGE_NOW,
-	POWER_SUPPLY_PROP_CHARGE_FULL,
-	POWER_SUPPLY_PROP_CHARGE_COUNTER,
+	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_TEMP,
-	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
-	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
-	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
-	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
+	POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG,
+	POWER_SUPPLY_PROP_TIME_TO_FULL_AVG,
+	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 };
 
-int check_cap_level(int uisoc)
-{
-	if (uisoc >= 100)
-		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
-	else if (uisoc >= 80 && uisoc < 100)
-		return POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
-	else if (uisoc >= 20 && uisoc < 80)
-		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
-	else if (uisoc > 0 && uisoc < 20)
-		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
-	else if (uisoc == 0)
-		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
-	else
-		return POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
-}
-
 static int mm8013_get_property(struct power_supply *psy,
-					enum power_supply_property psp,
-					union power_supply_propval *val)
+			       enum power_supply_property psp,
+			       union power_supply_propval *val)
 {
-	int ret  = 0;
-	int ui_soc;
-	union power_supply_propval online, status;
-	union power_supply_propval tmp_val;
+	struct mm8013_chip *chip = psy->drv_data;
+	int ret = 0;
+	u32 regval;
 
-	if (has_8013) {
-		switch (psp) {
-		case POWER_SUPPLY_PROP_CAPACITY:
-			ret = mm8013_soc(&val->intval);
-			break;
-		case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-			ret = mm8013_voltage(&val->intval);
-			val->intval = ((val->intval) * 1000);
-			break;
-		case POWER_SUPPLY_PROP_CURRENT_NOW:
-		case POWER_SUPPLY_PROP_CURRENT_AVG:
-			ret = mm8013_current(&val->intval);
-			val->intval = ((val->intval) * 1000);
-			break;
-		case POWER_SUPPLY_PROP_TEMP:
-			ret = mm8013_temperature(&val->intval);
-			break;
-		case POWER_SUPPLY_PROP_PRESENT:
-			ret = mm8013_voltage(&val->intval);
-			if (val->intval <= 2000)
-				val->intval = 0;
-			else
-				val->intval = 1;
-			break;
-		/* mtk add */
-		case POWER_SUPPLY_PROP_STATUS:
-			if (IS_ERR_OR_NULL(chip->chg_psy)) {
-				chip->chg_psy =
-					devm_power_supply_get_by_phandle(chip->dev, "charger");
-				pr_info("[%s]: get charger phandle fail\n", __func__);
-				val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
-			} else {
-				ret = power_supply_get_property(chip->chg_psy,
-					POWER_SUPPLY_PROP_ONLINE, &online);
+	switch (psp) {
+	case POWER_SUPPLY_PROP_CAPACITY:
+		ret = regmap_read(chip->regmap, REG_STATE_OF_CHARGE, &regval);
+		if (ret < 0)
+			return ret;
 
-				ret = power_supply_get_property(chip->chg_psy,
-					POWER_SUPPLY_PROP_STATUS, &status);
+		val->intval = regval;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL:
+		ret = regmap_read(chip->regmap, REG_FULL_CHARGE_CAPACITY, &regval);
+		if (ret < 0)
+			return ret;
 
-				if (!online.intval)
-					val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
-				else
-					val->intval  = status.intval;
-			}
-			break;
-		case POWER_SUPPLY_PROP_HEALTH:
+		val->intval = 1000 * regval;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		ret = regmap_read(chip->regmap, REG_DESIGN_CAPACITY, &regval);
+		if (ret < 0)
+			return ret;
+
+		val->intval = 1000 * regval;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_NOW:
+		ret = regmap_read(chip->regmap, REG_NOMINAL_CHARGE_CAPACITY, &regval);
+		if (ret < 0)
+			return ret;
+
+		val->intval = 1000 * regval;
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		ret = regmap_read(chip->regmap, REG_MAX_LOAD_CURRENT, &regval);
+		if (ret < 0)
+			return ret;
+
+		val->intval = -1000 * (s16)regval;
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		ret = regmap_read(chip->regmap, REG_AVERAGE_CURRENT, &regval);
+		if (ret < 0)
+			return ret;
+
+		val->intval = -1000 * (s16)regval;
+		break;
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+		ret = regmap_read(chip->regmap, REG_CYCLE_COUNT, &regval);
+		if (ret < 0)
+			return ret;
+
+		val->intval = regval;
+		break;
+	case POWER_SUPPLY_PROP_HEALTH:
+		ret = regmap_read(chip->regmap, REG_FLAGS, &regval);
+		if (ret < 0)
+			return ret;
+
+		if (regval & MM8013_FLAG_UT)
+			val->intval = POWER_SUPPLY_HEALTH_COLD;
+		else if (regval & (MM8013_FLAG_ODC | MM8013_FLAG_OCC))
+			val->intval = POWER_SUPPLY_HEALTH_OVERCURRENT;
+		else if (regval & (MM8013_FLAG_BATLOW))
+			val->intval = POWER_SUPPLY_HEALTH_UNSPEC_FAILURE;
+		else if (regval & MM8013_FLAG_BATHI)
+			val->intval = POWER_SUPPLY_HEALTH_OVERVOLTAGE;
+		else if (regval & (MM8013_FLAG_OT | MM8013_FLAG_OTD | MM8013_FLAG_OTC))
+			val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
+		else
 			val->intval = POWER_SUPPLY_HEALTH_GOOD;
-			break;
-		case POWER_SUPPLY_PROP_TECHNOLOGY:
-			val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
-			break;
-		case POWER_SUPPLY_PROP_CYCLE_COUNT:
-			val->intval = 1;
-			break;
-		case POWER_SUPPLY_PROP_CHARGE_FULL:
-			val->intval = BATTERY_QMAX * 1000;
-			break;
-		case POWER_SUPPLY_PROP_CHARGE_COUNTER:
-			ret = mm8013_soc(&val->intval);
-			val->intval = (val->intval) * ((BATTERY_QMAX * 1000) / 100);
-			break;
-		case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
-			mm8013_soc(&(tmp_val.intval));
-			val->intval = check_cap_level(tmp_val.intval);
-			break;
-		case POWER_SUPPLY_PROP_TIME_TO_FULL_NOW:
-			mm8013_soc(&tmp_val.intval);
-			ui_soc = tmp_val.intval;
-			ret = check_cap_level(ui_soc);
-			if ((ret == POWER_SUPPLY_CAPACITY_LEVEL_FULL) ||
-				(ret == POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN))
-				val->intval = 0;
-			else {
-				int q_max_now = BATTERY_QMAX;
-				int remain_ui = 100 - ui_soc;
-				int remain_mah = remain_ui * q_max_now / 100;
-				int current_now = 0;
-				int time_to_full = 0;
+		break;
+	case POWER_SUPPLY_PROP_PRESENT:
+		ret = regmap_read(chip->regmap, REG_TEMPERATURE, &regval);
+		if (ret < 0)
+			return ret;
 
-				mm8013_current(&tmp_val.intval);
-				current_now = tmp_val.intval;
-				if (current_now != 0)
-					time_to_full = remain_mah * 3600 / current_now;
-					pr_info("time_to_full:%d, remain:ui:%d mah:%d, current_now:%d, qmax:%d\n",
-						time_to_full, remain_ui, remain_mah,
-						current_now, q_max_now);
-					val->intval = abs(time_to_full);
-				}
-			break;
-		case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-			val->intval = 0;
-			break;
-		case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
-			val->intval = BATTERY_CV;
-			break;
-		default:
-			return -EINVAL;
-		}
-	} else {
-		pr_info("failed: %s!\n", __func__);
-		val->intval = -99;
+		val->intval = ((s16)regval > 0);
+		break;
+	case POWER_SUPPLY_PROP_STATUS:
+		ret = regmap_read(chip->regmap, REG_FLAGS, &regval);
+		if (ret < 0)
+			return ret;
+
+		if (regval & MM8013_FLAG_DSG)
+			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+		else if (regval & MM8013_FLAG_CHG_INH)
+			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+		else if (regval & MM8013_FLAG_CHG)
+			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+		else if (regval & MM8013_FLAG_FC)
+			val->intval = POWER_SUPPLY_STATUS_FULL;
+		else
+			val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
+		break;
+	case POWER_SUPPLY_PROP_TEMP:
+		ret = regmap_read(chip->regmap, REG_TEMPERATURE, &regval);
+		if (ret < 0)
+			return ret;
+
+		val->intval = DECIKELVIN_TO_DECIDEGC(regval);
+		break;
+	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG:
+		ret = regmap_read(chip->regmap, REG_AVERAGE_TIME_TO_EMPTY, &regval);
+		if (ret < 0)
+			return ret;
+
+		/* The estimation is not yet ready */
+		if (regval == U16_MAX)
+			return -ENODATA;
+
+		val->intval = regval;
+		break;
+	case POWER_SUPPLY_PROP_TIME_TO_FULL_AVG:
+		ret = regmap_read(chip->regmap, REG_AVERAGE_TIME_TO_FULL, &regval);
+		if (ret < 0)
+			return ret;
+
+		/* The estimation is not yet ready */
+		if (regval == U16_MAX)
+			return -ENODATA;
+
+		val->intval = regval;
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+		ret = regmap_read(chip->regmap, REG_VOLTAGE, &regval);
+		if (ret < 0)
+			return ret;
+
+		val->intval = 1000 * regval;
+		break;
+	default:
+		return -EINVAL;
 	}
 
-	return ret;
+	return 0;
 }
 
-static void mm8013_external_power_changed(struct power_supply *psy)
+static const struct power_supply_desc mm8013_desc = {
+	.name			= "mm8013",
+	.type			= POWER_SUPPLY_TYPE_BATTERY,
+	.properties		= mm8013_battery_props,
+	.num_properties		= ARRAY_SIZE(mm8013_battery_props),
+	.get_property		= mm8013_get_property,
+};
+
+static const struct regmap_config mm8013_regmap_config = {
+	.reg_bits = 8,
+	.val_bits = 16,
+	.max_register = 0x68,
+	.use_single_read = true,
+	.use_single_write = true,
+	.val_format_endian = REGMAP_ENDIAN_LITTLE,
+};
+
+static int mm8013_probe(struct i2c_client *client)
 {
-	if (chip->is_probe_done == false) {
-		pr_info("[%s]mm8013 probe is not rdy:%d\n",
-			__func__, chip->is_probe_done);
-		return;
-	}
+	struct power_supply_config psy_cfg = {};
+	struct device *dev = &client->dev;
+	struct power_supply *psy;
+	struct mm8013_chip *chip;
+	int ret = 0;
 
-	power_supply_changed(chip->mm8013_psy);
-}
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_WORD_DATA))
+		return dev_err_probe(dev, -EIO,
+				     "I2C_FUNC_SMBUS_WORD_DATA not supported\n");
 
-static int	mm8013_probe(struct i2c_client *client,
-				 const struct i2c_device_id *id)
-{
-	struct device *cdev = &client->dev;
-	int ret;
-	struct power_supply_desc *psy_desc;
-	struct power_supply_config psy_cfg = {0};
-
-	has_8013 = false;
-	pr_info("%s start!\n", __func__);
-
-	if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_WORD_DATA)) {
-		pr_info("failed: %s smbus data not supported!\n", __func__);
-		return -EIO;
-	}
-
-	chip = devm_kzalloc(cdev, sizeof(struct mm8013_chip), GFP_KERNEL);
+	chip = devm_kzalloc(dev, sizeof(struct mm8013_chip), GFP_KERNEL);
 	if (!chip)
 		return -ENOMEM;
 
 	chip->client = client;
-	chip->dev = &client->dev;
 
-	i2c_set_clientdata(client, chip);
-
-	ret = mm8013_checkdevice();
-	if (ret < 0)
-		pr_info("failed to access\n");
-	else
-		has_8013 = true;
-
-	psy_desc = devm_kzalloc(&client->dev, sizeof(*psy_desc), GFP_KERNEL);
-	if (!psy_desc)
-		return -ENOMEM;
-
-	psy_cfg.drv_data = chip;
-	psy_desc->name = "battery";
-	psy_desc->type = POWER_SUPPLY_TYPE_BATTERY;
-	psy_desc->properties = mm8013_battery_props;
-	psy_desc->num_properties = ARRAY_SIZE(mm8013_battery_props);
-	psy_desc->get_property = mm8013_get_property;
-	psy_desc->external_power_changed = mm8013_external_power_changed;
-	psy_desc->set_property = NULL;
-
-	chip->mm8013_psy = power_supply_register(&client->dev, psy_desc, &psy_cfg);
-	if (IS_ERR(chip->mm8013_psy)) {
-		ret = PTR_ERR(chip->mm8013_psy);
-		pr_info("failed to register battery: %d\n", ret);
-
-		return ret;
+	chip->regmap = devm_regmap_init_i2c(client, &mm8013_regmap_config);
+	if (IS_ERR(chip->regmap)) {
+		ret = PTR_ERR(chip->regmap);
+		return dev_err_probe(dev, ret, "Couldn't initialize regmap\n");
 	}
 
-	pr_info("%s success!\n", __func__);
-	chip->is_probe_done = true;
+	ret = mm8013_checkdevice(chip);
+	if (ret)
+		return dev_err_probe(dev, ret, "MM8013 not found\n");
+
+	psy_cfg.drv_data = chip;
+	psy_cfg.of_node = dev->of_node;
+
+	psy = devm_power_supply_register(dev, &mm8013_desc, &psy_cfg);
+	if (IS_ERR(psy))
+		return PTR_ERR(psy);
 
 	return 0;
 }
 
-static	struct i2c_device_id mm8013_id_table[] = {
-	{ "mm8013", 0 },
-	{},
+static const struct i2c_device_id mm8013_id_table[] = {
+	{ "mm8013" },
+	{}
 };
 MODULE_DEVICE_TABLE(i2c, mm8013_id_table);
 
 static const struct of_device_id mm8013_match_table[] = {
-	{ .compatible = "nvt,mm8013",},
-	{},
+	{ .compatible = "mitsumi,mm8013" },
+	{}
 };
 
 static struct i2c_driver mm8013_i2c_driver = {
-	.driver    = {
-	.name  = "mm8013",
-	.owner = THIS_MODULE,
-	.of_match_table = mm8013_match_table,
+	.probe = mm8013_probe,
+	.id_table = mm8013_id_table,
+	.driver = {
+		.name = "mm8013",
+		.of_match_table = mm8013_match_table,
 	},
-	.probe	   = mm8013_probe,
-	.id_table  = mm8013_id_table,
 };
+module_i2c_driver(mm8013_i2c_driver);
 
-static int __init mm8013_i2c_init(void)
-{
-	return i2c_add_driver(&mm8013_i2c_driver);
-}
-static void __exit mm8013_i2c_exit(void)
-{
-	i2c_del_driver(&mm8013_i2c_driver);
-}
-
-module_init(mm8013_i2c_init);
-module_exit(mm8013_i2c_exit);
-MODULE_DESCRIPTION("I2c bus driver for mm8013x gauge");
-MODULE_LICENSE("GPL v2");
+MODULE_DESCRIPTION("MM8013 fuel gauge driver");
+MODULE_LICENSE("GPL");

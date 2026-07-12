@@ -30,6 +30,7 @@ static const struct debugfs_reg32 mtu3_ippc_regs[] = {
 	dump_register(SSUSB_IP_PW_CTRL1),
 	dump_register(SSUSB_IP_PW_CTRL2),
 	dump_register(SSUSB_IP_PW_CTRL3),
+	dump_register(SSUSB_IP_PW_STS1),
 	dump_register(SSUSB_OTG_STS),
 	dump_register(SSUSB_IP_XHCI_CAP),
 	dump_register(SSUSB_IP_DEV_CAP),
@@ -100,13 +101,13 @@ static int mtu3_ep_used_show(struct seq_file *sf, void *unused)
 	for (i = 0; i < mtu->num_eps; i++) {
 		mep = mtu->in_eps + i;
 		if (mep->flags & MTU3_EP_ENABLED) {
-			seq_printf(sf, "%s - type: %d\n", mep->name, mep->type);
+			seq_printf(sf, "%s - type: %s\n", mep->name, usb_ep_type_string(mep->type));
 			used++;
 		}
 
 		mep = mtu->out_eps + i;
 		if (mep->flags & MTU3_EP_ENABLED) {
-			seq_printf(sf, "%s - type: %d\n", mep->name, mep->type);
+			seq_printf(sf, "%s - type: %s\n", mep->name, usb_ep_type_string(mep->type));
 			used++;
 		}
 	}
@@ -176,8 +177,8 @@ static int mtu3_ep_info_show(struct seq_file *sf, void *unused)
 	unsigned long flags;
 
 	spin_lock_irqsave(&mtu->lock, flags);
-	seq_printf(sf, "ep - type:%d, maxp:%d, slot:%d, flags:%x\n",
-		   mep->type, mep->maxp, mep->slot, mep->flags);
+	seq_printf(sf, "ep - type:%s, maxp:%d, slot:%d, flags:%x\n",
+		   usb_ep_type_string(mep->type), mep->maxp, mep->slot, mep->flags);
 	spin_unlock_irqrestore(&mtu->lock, flags);
 
 	return 0;
@@ -321,7 +322,6 @@ static ssize_t mtu3_probe_write(struct file *file, const char __user *ubuf,
 	u32 val;
 	int i;
 
-	memset(buf, 0x00, sizeof(buf));
 	if (copy_from_user(&buf, ubuf, min_t(size_t, sizeof(buf) - 1, count)))
 		return -EFAULT;
 
@@ -450,7 +450,6 @@ static ssize_t ssusb_mode_write(struct file *file, const char __user *ubuf,
 	struct ssusb_mtk *ssusb = sf->private;
 	char buf[16];
 
-	memset(buf, 0x00, sizeof(buf));
 	if (copy_from_user(&buf, ubuf, min_t(size_t, sizeof(buf) - 1, count)))
 		return -EFAULT;
 
@@ -499,7 +498,6 @@ static ssize_t ssusb_vbus_write(struct file *file, const char __user *ubuf,
 	char buf[16];
 	bool enable;
 
-	memset(buf, 0x00, sizeof(buf));
 	if (copy_from_user(&buf, ubuf, min_t(size_t, sizeof(buf) - 1, count)))
 		return -EFAULT;
 

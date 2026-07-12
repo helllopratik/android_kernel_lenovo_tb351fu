@@ -22,6 +22,11 @@ modules.builtin.modinfo
 This file contains modinfo from all modules that are built into the kernel.
 Unlike modinfo of a separate module, all fields are prefixed with module name.
 
+modules.builtin.ranges
+----------------------
+This file contains address offset ranges (per ELF section) for all modules
+that are built into the kernel. Together with System.map, it can be used
+to associate module names with symbols.
 
 Environment variables
 =====================
@@ -31,6 +36,11 @@ KCPPFLAGS
 Additional options to pass when preprocessing. The preprocessing options
 will be used in all cases where kbuild does preprocessing including
 building C files and assembler files.
+
+KCPPFLAGS_COMPAT
+----------------
+Additional options to pass to $(CC_COMPAT) when preprocessing C and assembler
+files.
 
 KAFLAGS
 -------
@@ -48,6 +58,10 @@ KCFLAGS
 -------
 Additional options to the C compiler (for built-in and modules).
 
+KRUSTFLAGS
+----------
+Additional options to the Rust compiler (for built-in and modules).
+
 CFLAGS_KERNEL
 -------------
 Additional options for $(CC) when used to compile
@@ -56,6 +70,15 @@ code that is compiled as built-in.
 CFLAGS_MODULE
 -------------
 Additional module specific options to use for $(CC).
+
+RUSTFLAGS_KERNEL
+----------------
+Additional options for $(RUSTC) when used to compile
+code that is compiled as built-in.
+
+RUSTFLAGS_MODULE
+----------------
+Additional module specific options to use for $(RUSTC).
 
 LDFLAGS_MODULE
 --------------
@@ -68,6 +91,21 @@ Additional flags to be passed to $(HOSTCC) when building host programs.
 HOSTCXXFLAGS
 ------------
 Additional flags to be passed to $(HOSTCXX) when building host programs.
+
+HOSTRUSTFLAGS
+-------------
+Additional flags to be passed to $(HOSTRUSTC) when building host programs.
+
+PROCMACROLDFLAGS
+----------------
+Flags to be passed when linking Rust proc macros. Since proc macros are loaded
+by rustc at build time, they must be linked in a way that is compatible with
+the rustc toolchain being used.
+
+For instance, it can be useful when rustc uses a different C library than
+the one the user wants to use for host programs.
+
+If unset, it defaults to the flags passed when linking host programs.
 
 HOSTLDFLAGS
 -----------
@@ -112,6 +150,11 @@ KBUILD_OUTPUT
 -------------
 Specify the output directory when building the kernel.
 
+This variable can also be used to point to the kernel output directory when
+building external modules against a pre-built kernel in a separate build
+directory. Please note that this does NOT specify the output directory for the
+external modules themselves.
+
 The output directory can also be specified using "O=...".
 
 Setting "O=..." takes precedence over KBUILD_OUTPUT.
@@ -133,6 +176,12 @@ the UTS_MACHINE variable, and on some architectures also the kernel config.
 The value of KBUILD_DEBARCH is assumed (not checked) to be a valid Debian
 architecture.
 
+KDOCFLAGS
+---------
+Specify extra (warning/error) flags for kernel-doc checks during the build,
+see scripts/kernel-doc for which flags are supported. Note that this doesn't
+(currently) apply to documentation builds.
+
 ARCH
 ----
 Set ARCH to the architecture to be built.
@@ -143,7 +192,7 @@ directory name found in the arch/ directory.
 But some architectures such as x86 and sparc have aliases.
 
 - x86: i386 for 32 bit, x86_64 for 64 bit
-- sh: sh for 32 bit, sh64 for 64 bit
+- parisc: parisc64 for 64 bit
 - sparc: sparc32 for 32 bit, sparc64 for 64 bit
 
 CROSS_COMPILE
@@ -220,6 +269,12 @@ The output directory is often set using "O=..." on the commandline.
 
 The value can be overridden in which case the default value is ignored.
 
+INSTALL_DTBS_PATH
+-----------------
+INSTALL_DTBS_PATH specifies where to install device tree blobs for
+relocations required by build roots.  This is not defined in the
+makefile but the argument can be passed to make if needed.
+
 KBUILD_ABS_SRCTREE
 --------------------------------------------------
 Kbuild uses a relative path to point to the tree when possible. For instance,
@@ -260,6 +315,13 @@ to be included in the databases, separated by blank space. E.g.::
 To get all available archs you can also specify all. E.g.::
 
     $ make ALLSOURCE_ARCHS=all tags
+
+IGNORE_DIRS
+-----------
+For tags/TAGS/cscope targets, you can choose which directories won't
+be included in the databases, separated by blank space. E.g.::
+
+    $ make IGNORE_DIRS="drivers/gpu/drm/radeon tools" cscope
 
 KBUILD_BUILD_TIMESTAMP
 ----------------------

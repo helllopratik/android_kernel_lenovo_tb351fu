@@ -19,9 +19,13 @@ struct typec_cable;
 struct typec_plug;
 struct typec_port;
 struct typec_altmode_ops;
+struct typec_cable_ops;
 
 struct fwnode_handle;
 struct device;
+
+struct usb_power_delivery;
+struct usb_power_delivery_desc;
 
 enum typec_port_type {
 	TYPEC_PORT_SRC,
@@ -52,6 +56,16 @@ enum typec_role {
 	TYPEC_SINK,
 	TYPEC_SOURCE,
 };
+
+static inline int is_sink(enum typec_role role)
+{
+	return role == TYPEC_SINK;
+}
+
+static inline int is_source(enum typec_role role)
+{
+	return role == TYPEC_SOURCE;
+}
 
 enum typec_pwr_opmode {
 	TYPEC_PWR_MODE_USB,
@@ -145,11 +159,17 @@ void typec_port_register_altmodes(struct typec_port *port,
 	const struct typec_altmode_ops *ops, void *drvdata,
 	struct typec_altmode **altmodes, size_t n);
 
+void typec_port_register_cable_ops(struct typec_altmode **altmodes, int max_altmodes,
+				   const struct typec_cable_ops *ops);
+
 void typec_unregister_altmode(struct typec_altmode *altmode);
 
 struct typec_port *typec_altmode2port(struct typec_altmode *alt);
 
 void typec_altmode_update_active(struct typec_altmode *alt, bool active);
+
+void typec_altmode_set_ops(struct typec_altmode *alt,
+			   const struct typec_altmode_ops *ops);
 
 enum typec_plug_index {
 	TYPEC_PLUG_SOP_P,
@@ -190,6 +210,8 @@ struct typec_cable_desc {
  * @accessory: Audio, Debug or none.
  * @identity: Discover Identity command data
  * @pd_revision: USB Power Delivery Specification Revision if supported
+ * @attach: Notification about attached USB device
+ * @deattach: Notification about removed USB device
  *
  * Details about a partner that is attached to USB Type-C port. If @identity
  * member exists when partner is registered, a directory named "identity" is
@@ -205,6 +227,9 @@ struct typec_partner_desc {
 	enum typec_accessory	accessory;
 	struct usb_pd_identity	*identity;
 	u16			pd_revision; /* 0300H = "3.0" */
+
+	void (*attach)(struct typec_partner *partner, struct device *dev);
+	void (*deattach)(struct typec_partner *partner, struct device *dev);
 };
 
 /**
@@ -214,6 +239,8 @@ struct typec_partner_desc {
  * @pr_set: Set Power Role
  * @vconn_set: Source VCONN
  * @port_type_set: Set port type
+ * @pd_get: Get available USB Power Delivery Capabilities.
+ * @pd_set: Set USB Power Delivery Capabilities.
  */
 struct typec_operations {
 	int (*try_role)(struct typec_port *port, int role);
@@ -222,7 +249,11 @@ struct typec_operations {
 	int (*vconn_set)(struct typec_port *port, enum typec_role role);
 	int (*port_type_set)(struct typec_port *port,
 			     enum typec_port_type type);
+	struct usb_power_delivery **(*pd_get)(struct typec_port *port);
+	int (*pd_set)(struct typec_port *port, struct usb_power_delivery *pd);
+
 	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 };
 
 enum usb_pd_svdm_ver {
@@ -242,6 +273,7 @@ enum usb_pd_svdm_ver {
  * @accessory: Supported Accessory Modes
  * @fwnode: Optional fwnode of the port
  * @driver_data: Private pointer for driver specific info
+ * @pd: Optional USB Power Delivery Support
  * @ops: Port operations vector
  *
  * Static capabilities of a single USB Type-C port.
@@ -259,8 +291,12 @@ struct typec_capability {
 	struct fwnode_handle	*fwnode;
 	void			*driver_data;
 
+	struct usb_power_delivery *pd;
+
 	const struct typec_operations	*ops;
+
 	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 };
 
 /* Specific to try_role(). Indicates the user want's to clear the preference. */
@@ -298,6 +334,9 @@ int typec_set_mode(struct typec_port *port, int mode);
 
 void *typec_get_drvdata(struct typec_port *port);
 
+int typec_get_fw_cap(struct typec_capability *cap,
+		     struct fwnode_handle *fwnode);
+
 int typec_find_pwr_opmode(const char *name);
 int typec_find_orientation(const char *name);
 int typec_find_port_power_role(const char *name);
@@ -307,4 +346,47 @@ int typec_find_port_data_role(const char *name);
 void typec_partner_set_svdm_version(struct typec_partner *partner,
 				    enum usb_pd_svdm_ver svdm_version);
 int typec_get_negotiated_svdm_version(struct typec_port *port);
+
+int typec_get_cable_svdm_version(struct typec_port *port);
+void typec_cable_set_svdm_version(struct typec_cable *cable, enum usb_pd_svdm_ver svdm_version);
+
+struct usb_power_delivery *typec_partner_usb_power_delivery_register(struct typec_partner *partner,
+							struct usb_power_delivery_desc *desc);
+
+int typec_port_set_usb_power_delivery(struct typec_port *port, struct usb_power_delivery *pd);
+int typec_partner_set_usb_power_delivery(struct typec_partner *partner,
+					 struct usb_power_delivery *pd);
+
+/**
+ * struct typec_connector - Representation of Type-C port for external drivers
+ * @attach: notification about device removal
+ * @deattach: notification about device removal
+ *
+ * Drivers that control the USB and other ports (DisplayPorts, etc.), that are
+ * connected to the Type-C connectors, can use these callbacks to inform the
+ * Type-C connector class about connections and disconnections. That information
+ * can then be used by the typec-port drivers to power on or off parts that are
+ * needed or not needed - as an example, in USB mode if USB2 device is
+ * enumerated, USB3 components (retimers, phys, and what have you) do not need
+ * to be powered on.
+ *
+ * The attached (enumerated) devices will be liked with the typec-partner device.
+ */
+struct typec_connector {
+	void (*attach)(struct typec_connector *con, struct device *dev);
+	void (*deattach)(struct typec_connector *con, struct device *dev);
+};
+
+static inline void typec_attach(struct typec_connector *con, struct device *dev)
+{
+	if (con && con->attach)
+		con->attach(con, dev);
+}
+
+static inline void typec_deattach(struct typec_connector *con, struct device *dev)
+{
+	if (con && con->deattach)
+		con->deattach(con, dev);
+}
+
 #endif /* __LINUX_USB_TYPEC_H */

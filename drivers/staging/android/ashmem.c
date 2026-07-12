@@ -20,15 +20,12 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/uaccess.h>
+#include <linux/page_size_compat.h>
 #include <linux/personality.h>
 #include <linux/bitops.h>
 #include <linux/mutex.h>
 #include <linux/shmem_fs.h>
 #include "ashmem.h"
-
-#define ASHMEM_NAME_PREFIX "dev/ashmem/"
-#define ASHMEM_NAME_PREFIX_LEN (sizeof(ASHMEM_NAME_PREFIX) - 1)
-#define ASHMEM_FULL_NAME_LEN (ASHMEM_NAME_LEN + ASHMEM_NAME_PREFIX_LEN)
 
 /**
  * struct ashmem_area - The anonymous shared memory area
@@ -179,6 +176,7 @@ static inline void lru_del(struct ashmem_range *range)
  * @purged:	   Initial purge status (ASMEM_NOT_PURGED or ASHMEM_WAS_PURGED)
  * @start:	   The starting page (inclusive)
  * @end:	   The ending page (inclusive)
+ * @new_range:	   The placeholder for the new range
  *
  * This function is protected by ashmem_mutex.
  */
@@ -371,7 +369,7 @@ ashmem_vmfile_get_unmapped_area(struct file *file, unsigned long addr,
 				unsigned long len, unsigned long pgoff,
 				unsigned long flags)
 {
-	return current->mm->get_unmapped_area(file, addr, len, pgoff, flags);
+	return mm_get_unmapped_area(current->mm, file, addr, len, pgoff, flags);
 }
 
 static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
@@ -389,7 +387,7 @@ static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
 	}
 
 	/* requested mapping size larger than object size */
-	if (vma->vm_end - vma->vm_start > PAGE_ALIGN(asma->size)) {
+	if (vma->vm_end - vma->vm_start > __PAGE_ALIGN(asma->size)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -400,7 +398,7 @@ static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
 		ret = -EPERM;
 		goto out;
 	}
-	vma->vm_flags &= ~calc_vm_may_flags(~asma->prot_mask);
+	vm_flags_clear(vma, calc_vm_may_flags(~asma->prot_mask));
 
 	if (!asma->file) {
 		char *name = ASHMEM_NAME_DEF;
@@ -450,9 +448,9 @@ static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
 		vma_set_anonymous(vma);
 	}
 
-	if (vma->vm_file)
-		fput(vma->vm_file);
-	vma->vm_file = asma->file;
+	vma_set_file(vma, asma->file);
+	/* XXX: merge this with the get_file() above if possible */
+	fput(asma->file);
 
 out:
 	mutex_unlock(&ashmem_mutex);
@@ -526,15 +524,26 @@ ashmem_shrink_count(struct shrinker *shrink, struct shrink_control *sc)
 	return lru_count;
 }
 
-static struct shrinker ashmem_shrinker = {
-	.count_objects = ashmem_shrink_count,
-	.scan_objects = ashmem_shrink_scan,
+static struct shrinker *ashmem_shrinker;
+
+static int __init ashmem_init_shrinker(void)
+{
+	ashmem_shrinker = shrinker_alloc(0, "android-ashmem");
+	if (!ashmem_shrinker)
+		return -ENOMEM;
+
+	ashmem_shrinker->count_objects = ashmem_shrink_count;
+	ashmem_shrinker->scan_objects = ashmem_shrink_scan;
 	/*
 	 * XXX (dchinner): I wish people would comment on why they need on
 	 * significant changes to the default value here
 	 */
-	.seeks = DEFAULT_SEEKS * 4,
-};
+	ashmem_shrinker->seeks = DEFAULT_SEEKS * 4;
+
+	shrinker_register(ashmem_shrinker);
+
+	return 0;
+}
 
 static int set_prot_mask(struct ashmem_area *asma, unsigned long prot)
 {
@@ -702,30 +711,33 @@ static int ashmem_pin(struct ashmem_area *asma, size_t pgstart, size_t pgend,
 static int ashmem_unpin(struct ashmem_area *asma, size_t pgstart, size_t pgend,
 			struct ashmem_range **new_range)
 {
-	struct ashmem_range *range, *next;
+	struct ashmem_range *range = NULL, *iter, *next;
 	unsigned int purged = ASHMEM_NOT_PURGED;
 
 restart:
-	list_for_each_entry_safe(range, next, &asma->unpinned_list, unpinned) {
+	list_for_each_entry_safe(iter, next, &asma->unpinned_list, unpinned) {
 		/* short circuit: this is our insertion point */
-		if (range_before_page(range, pgstart))
+		if (range_before_page(iter, pgstart)) {
+			range = iter;
 			break;
+		}
 
 		/*
 		 * The user can ask us to unpin pages that are already entirely
 		 * or partially pinned. We handle those two cases here.
 		 */
-		if (page_range_subsumed_by_range(range, pgstart, pgend))
+		if (page_range_subsumed_by_range(iter, pgstart, pgend))
 			return 0;
-		if (page_range_in_range(range, pgstart, pgend)) {
-			pgstart = min(range->pgstart, pgstart);
-			pgend = max(range->pgend, pgend);
-			purged |= range->purged;
-			range_del(range);
+		if (page_range_in_range(iter, pgstart, pgend)) {
+			pgstart = min(iter->pgstart, pgstart);
+			pgend = max(iter->pgend, pgend);
+			purged |= iter->purged;
+			range_del(iter);
 			goto restart;
 		}
 	}
 
+	range = list_prepare_entry(range, &asma->unpinned_list, unpinned);
 	range_alloc(asma, range, purged, pgstart, pgend, new_range);
 	return 0;
 }
@@ -816,6 +828,7 @@ out_unlock:
 static long ashmem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct ashmem_area *asma = file->private_data;
+	unsigned long ino;
 	long ret = -ENOTTY;
 
 	switch (cmd) {
@@ -855,9 +868,26 @@ static long ashmem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				.gfp_mask = GFP_KERNEL,
 				.nr_to_scan = LONG_MAX,
 			};
-			ret = ashmem_shrink_count(&ashmem_shrinker, &sc);
-			ashmem_shrink_scan(&ashmem_shrinker, &sc);
+			ret = ashmem_shrink_count(ashmem_shrinker, &sc);
+			ashmem_shrink_scan(ashmem_shrinker, &sc);
 		}
+		break;
+	case ASHMEM_GET_FILE_ID:
+		/* Lock around our check to avoid racing with ashmem_mmap(). */
+		mutex_lock(&ashmem_mutex);
+		if (!asma || !asma->file) {
+			mutex_unlock(&ashmem_mutex);
+			ret = -EINVAL;
+			break;
+		}
+		ino = file_inode(asma->file)->i_ino;
+		mutex_unlock(&ashmem_mutex);
+
+		if (copy_to_user((void __user *)arg, &ino, sizeof(ino))) {
+			ret = -EFAULT;
+			break;
+		}
+		ret = 0;
 		break;
 	}
 
@@ -915,15 +945,6 @@ static const struct file_operations ashmem_fops = {
 #endif
 };
 
-/*
- * is_ashmem_file - Check if struct file* is associated with ashmem
- */
-int is_ashmem_file(struct file *file)
-{
-	return file->f_op == &ashmem_fops;
-}
-EXPORT_SYMBOL_GPL(is_ashmem_file);
-
 static struct miscdevice ashmem_misc = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "ashmem",
@@ -944,7 +965,7 @@ static int __init ashmem_init(void)
 
 	ashmem_range_cachep = kmem_cache_create("ashmem_range_cache",
 						sizeof(struct ashmem_range),
-						0, 0, NULL);
+						0, SLAB_RECLAIM_ACCOUNT, NULL);
 	if (!ashmem_range_cachep) {
 		pr_err("failed to create slab cache\n");
 		goto out_free1;
@@ -956,7 +977,7 @@ static int __init ashmem_init(void)
 		goto out_free2;
 	}
 
-	ret = register_shrinker(&ashmem_shrinker);
+	ret = ashmem_init_shrinker();
 	if (ret) {
 		pr_err("failed to register shrinker!\n");
 		goto out_demisc;

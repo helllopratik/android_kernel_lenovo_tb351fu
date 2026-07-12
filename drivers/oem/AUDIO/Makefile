@@ -1,1 +1,0 @@
-obj-$(CONFIG_SND_SMARTPA_AW883XX)	+= aw883xx/

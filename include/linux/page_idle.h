@@ -6,48 +6,14 @@
 #include <linux/page-flags.h>
 #include <linux/page_ext.h>
 
-#ifdef CONFIG_PAGE_IDLE_FLAG
-
-#ifdef CONFIG_64BIT
-static inline bool page_is_young(struct page *page)
-{
-	return PageYoung(page);
-}
-
-static inline void set_page_young(struct page *page)
-{
-	SetPageYoung(page);
-}
-
-static inline bool test_and_clear_page_young(struct page *page)
-{
-	return TestClearPageYoung(page);
-}
-
-static inline bool page_is_idle(struct page *page)
-{
-	return PageIdle(page);
-}
-
-static inline void set_page_idle(struct page *page)
-{
-	SetPageIdle(page);
-}
-
-static inline void clear_page_idle(struct page *page)
-{
-	ClearPageIdle(page);
-}
-#else /* !CONFIG_64BIT */
+#if defined(CONFIG_PAGE_IDLE_FLAG) && !defined(CONFIG_64BIT)
 /*
  * If there is not enough space to store Idle and Young bits in page flags, use
  * page ext flags instead.
  */
-extern struct page_ext_operations page_idle_ops;
-
-static inline bool page_is_young(struct page *page)
+static inline bool folio_test_young(const struct folio *folio)
 {
-	struct page_ext *page_ext = page_ext_get(page);
+	struct page_ext *page_ext = page_ext_get(&folio->page);
 	bool page_young;
 
 	if (unlikely(!page_ext))
@@ -59,9 +25,9 @@ static inline bool page_is_young(struct page *page)
 	return page_young;
 }
 
-static inline void set_page_young(struct page *page)
+static inline void folio_set_young(struct folio *folio)
 {
-	struct page_ext *page_ext = page_ext_get(page);
+	struct page_ext *page_ext = page_ext_get(&folio->page);
 
 	if (unlikely(!page_ext))
 		return;
@@ -70,9 +36,9 @@ static inline void set_page_young(struct page *page)
 	page_ext_put(page_ext);
 }
 
-static inline bool test_and_clear_page_young(struct page *page)
+static inline bool folio_test_clear_young(struct folio *folio)
 {
-	struct page_ext *page_ext = page_ext_get(page);
+	struct page_ext *page_ext = page_ext_get(&folio->page);
 	bool page_young;
 
 	if (unlikely(!page_ext))
@@ -84,23 +50,23 @@ static inline bool test_and_clear_page_young(struct page *page)
 	return page_young;
 }
 
-static inline bool page_is_idle(struct page *page)
+static inline bool folio_test_idle(const struct folio *folio)
 {
-	struct page_ext *page_ext = page_ext_get(page);
+	struct page_ext *page_ext = page_ext_get(&folio->page);
 	bool page_idle;
 
 	if (unlikely(!page_ext))
 		return false;
 
-	page_idle =  test_bit(PAGE_EXT_IDLE, &page_ext->flags);
+	page_idle = test_bit(PAGE_EXT_IDLE, &page_ext->flags);
 	page_ext_put(page_ext);
 
 	return page_idle;
 }
 
-static inline void set_page_idle(struct page *page)
+static inline void folio_set_idle(struct folio *folio)
 {
-	struct page_ext *page_ext = page_ext_get(page);
+	struct page_ext *page_ext = page_ext_get(&folio->page);
 
 	if (unlikely(!page_ext))
 		return;
@@ -109,9 +75,9 @@ static inline void set_page_idle(struct page *page)
 	page_ext_put(page_ext);
 }
 
-static inline void clear_page_idle(struct page *page)
+static inline void folio_clear_idle(struct folio *folio)
 {
-	struct page_ext *page_ext = page_ext_get(page);
+	struct page_ext *page_ext = page_ext_get(&folio->page);
 
 	if (unlikely(!page_ext))
 		return;
@@ -119,37 +85,5 @@ static inline void clear_page_idle(struct page *page)
 	clear_bit(PAGE_EXT_IDLE, &page_ext->flags);
 	page_ext_put(page_ext);
 }
-#endif /* CONFIG_64BIT */
-
-#else /* !CONFIG_PAGE_IDLE_FLAG */
-
-static inline bool page_is_young(struct page *page)
-{
-	return false;
-}
-
-static inline void set_page_young(struct page *page)
-{
-}
-
-static inline bool test_and_clear_page_young(struct page *page)
-{
-	return false;
-}
-
-static inline bool page_is_idle(struct page *page)
-{
-	return false;
-}
-
-static inline void set_page_idle(struct page *page)
-{
-}
-
-static inline void clear_page_idle(struct page *page)
-{
-}
-
-#endif /* CONFIG_PAGE_IDLE_FLAG */
-
+#endif /* CONFIG_PAGE_IDLE_FLAG && !64BIT */
 #endif /* _LINUX_MM_PAGE_IDLE_H */
