@@ -69,7 +69,7 @@ If you are building through a full Android tree, use the same kernel path and de
 The goal of this repository is to make the published Lenovo kernel source more useful for community development on the `TB351FU`, especially for:
 
 - recovery bring-up
-- LineageOS / Android 16 experimentation
+- Evolution X / Android 17 experimentation
 - debugging boot and hardware initialization issues
 - educational study of the platform kernel layout
 
