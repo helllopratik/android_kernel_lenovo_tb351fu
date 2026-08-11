@@ -353,6 +353,10 @@ void panic(const char *fmt, ...)
 	if (!test_taint(TAINT_DIE) && oops_in_progress <= 1)
 		dump_stack();
 #endif
+	{
+		extern void draw_debug_red_bar_and_halt(void);
+		draw_debug_red_bar_and_halt();
+	}
 
 	/*
 	 * If kgdb is enabled, give it a chance to run before we stop all

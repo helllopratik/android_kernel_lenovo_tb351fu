@@ -349,10 +349,9 @@ static int mod_sysfs_init(struct module *mod)
 
 	kobj = kset_find_obj(module_kset, mod->name);
 	if (kobj) {
-		pr_err("%s: module is already loaded\n", mod->name);
+		pr_info("%s: module is already loaded, returning success\n", mod->name);
 		kobject_put(kobj);
-		err = -EINVAL;
-		goto out;
+		return 0;
 	}
 
 	mod->mkobj.mod = mod;

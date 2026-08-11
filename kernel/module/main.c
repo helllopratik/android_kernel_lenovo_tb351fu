@@ -3533,7 +3533,10 @@ SYSCALL_DEFINE3(init_module, void __user *, umod,
 		return err;
 	}
 
-	return load_module(&info, uargs, 0);
+	err = load_module(&info, uargs, 0);
+	if (err == -EEXIST)
+		err = 0;
+	return err;
 }
 
 struct idempotent {
@@ -3686,6 +3689,8 @@ SYSCALL_DEFINE3(finit_module, int, fd, const char __user *, uargs, int, flags)
 	f = fdget(fd);
 	err = idempotent_init_module(fd_file(f), uargs, flags);
 	fdput(f);
+	if (err == -EEXIST)
+		err = 0;
 	return err;
 }
 

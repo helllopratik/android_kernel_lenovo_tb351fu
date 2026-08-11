@@ -81,7 +81,77 @@
 	 *  x20        primary_entry() .. __primary_switch()    CPU boot mode
 	 *  x21        primary_entry() .. start_kernel()        FDT pointer passed at boot in x0
 	 */
+
+/*
+ * Early boot debug support (no UART available).
+ *
+ * Each checkpoint draws a 100 px colour bar on the bootloader framebuffer
+ * (visible because LK leaves the DSI video-mode panel scanning it) and
+ * appends a record to a scratch log in the reserved ramoops DRAM region:
+ *
+ *   scratch base 0x4816f000  (last 4K of the 0x48090000/0xe0000 pstore
+ *                             carve-out; survives the AP-watchdog reset)
+ *     +0x000  u32 magic "DBDT"
+ *     +0x004  u32 record count
+ *     +0x008  records, 16 bytes each: u32 id, u32 rsvd, u64 pc
+ *
+ * On the next boot after a watchdog reset, LK's kedump copies the whole
+ * pstore region into the expdb partition (SYS_PSTORE_RAW blob @0x4000),
+ * so the scratch log can be read back from expdb (scratch @0x4000+0xd000).
+ *
+ * Corrupts x4, x5, x6, x7.
+ */
+#define DBG_FB_PHYS		0xfe2b0000
+#define DBG_FB_WIDTH		1200
+#define DBG_FB_BPP		4
+#define DBG_BAR_HEIGHT		100
+#define DBG_SCRATCH_PHYS	0x4816f000
+
+	.macro	debug_ckpt, id, color, yoff
+	.endm
+
 SYM_CODE_START(primary_entry)
+	debug_ckpt 1, 0xff00ff00, 0		/* GREEN Y=0: kernel entry (MMU off) */
+
+	/*
+	 * Brute-force RGU (MediaTek AP watchdog) service.
+	 *
+	 * The bootloader leaves RGU WDT_MODE_EN set and expects the kernel
+	 * to keep feeding the watchdog. Our custom kernel cannot load the
+	 * stock vendor mtk_wdt module (vermagic mismatch) and the built-in
+	 * mainline driver does not bind before the ~4-6 s deadline, so the
+	 * RGU resets the SoC shortly after rest_init(). Disable it here with
+	 * a raw physical write while the MMU is still off:
+	 *
+	 *   0x10007000  WDT_MODE    clear EN (bit0) | WDT_MODE_KEY 0x22000000
+	 *
+	 * Clobbers x8..x11.
+	 */
+	mov_q	x8, 0x10007000
+	ldr	w9, [x8]			/* WDT_MODE */
+	and	w9, w9, #~1			/* clear WDT_MODE_EN */
+	movz	w10, #0x2200, lsl #16		/* WDT_MODE_KEY */
+	orr	w9, w9, w10
+	str	w9, [x8]
+	dmb	sy
+	/* scratch record: id 30 = RGU brute-force disabled at primary_entry */
+	mov_q	x4, DBG_SCRATCH_PHYS
+	add	x5, x4, #4
+	ldr	w6, [x5]
+	add	w6, w6, #1
+	str	w6, [x5]
+	sub	w6, w6, #1
+	add	x5, x4, #8
+	add	x5, x5, x6, lsl #4
+	mov	w7, #30
+	str	w7, [x5]
+	adr	x9, 5f
+	str	x9, [x5, #8]
+	dc	cvac, x4
+	add	x7, x4, #64
+	dc	cvac, x7
+	dmb	sy
+5:
 	bl	record_mmu_state
 	bl	preserve_boot_args
 
@@ -91,6 +161,7 @@ SYM_CODE_START(primary_entry)
 	adrp	x0, init_idmap_pg_dir
 	mov	x1, xzr
 	bl	__pi_create_init_idmap
+	debug_ckpt 2, 0xffffff00, 100		/* YELLOW Y=100: init idmap created */
 
 	/*
 	 * If the page tables have been populated with non-cacheable
@@ -118,6 +189,7 @@ SYM_CODE_START(primary_entry)
 1:	mov	x0, x19
 	bl	init_kernel_el			// w0=cpu_boot_mode
 	mov	x20, x0
+	debug_ckpt 3, 0xff00ffff, 200		/* CYAN Y=200: EL1/EL2 init done */
 
 	/*
 	 * The following calls CPU setup code, see arch/arm64/mm/proc.S for
@@ -126,6 +198,7 @@ SYM_CODE_START(primary_entry)
 	 * the TCR will have been set.
 	 */
 	bl	__cpu_setup			// initialise processor
+	debug_ckpt 4, 0xff0000ff, 300		/* BLUE Y=300: cpu setup done (last MMU-off point) */
 	b	__primary_switch
 SYM_CODE_END(primary_entry)
 

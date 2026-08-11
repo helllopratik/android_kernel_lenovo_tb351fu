@@ -1769,39 +1769,44 @@ static int __init cfg80211_init(void)
 {
 	int err;
 
+	pr_err("[CFG80211_STEP] 1: register_pernet_device\n");
 	err = register_pernet_device(&cfg80211_pernet_ops);
 	if (err)
 		goto out_fail_pernet;
 
+	pr_err("[CFG80211_STEP] 2: wiphy_sysfs_init\n");
 	err = wiphy_sysfs_init();
 	if (err)
 		goto out_fail_sysfs;
 
+	pr_err("[CFG80211_STEP] 3: register_netdevice_notifier\n");
 	err = register_netdevice_notifier(&cfg80211_netdev_notifier);
 	if (err)
 		goto out_fail_notifier;
 
+	pr_err("[CFG80211_STEP] 4: nl80211_init\n");
 	err = nl80211_init();
 	if (err)
 		goto out_fail_nl80211;
 
-	ieee80211_debugfs_dir = debugfs_create_dir("ieee80211", NULL);
-
-	err = regulatory_init();
-	if (err)
-		goto out_fail_reg;
-
+	pr_err("[CFG80211_STEP] 5: alloc_ordered_workqueue\n");
 	cfg80211_wq = alloc_ordered_workqueue("cfg80211", WQ_MEM_RECLAIM);
 	if (!cfg80211_wq) {
 		err = -ENOMEM;
 		goto out_fail_wq;
 	}
 
+	pr_err("[CFG80211_STEP] 6: regulatory_init\n");
+	err = regulatory_init();
+	if (err)
+		goto out_fail_reg;
+
+	pr_err("[CFG80211_STEP] 7: SUCCESS\n");
 	return 0;
 
-out_fail_wq:
-	regulatory_exit();
 out_fail_reg:
+	destroy_workqueue(cfg80211_wq);
+out_fail_wq:
 	debugfs_remove(ieee80211_debugfs_dir);
 	nl80211_exit();
 out_fail_nl80211:

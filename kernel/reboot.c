@@ -277,6 +277,8 @@ static void do_kernel_restart_prepare(void)
  */
 void kernel_restart(char *cmd)
 {
+	extern void ckpt_checkpoint(const char *stage);
+	ckpt_checkpoint("kernel:restart");
 	kernel_restart_prepare(cmd);
 	do_kernel_restart_prepare();
 	migrate_to_reboot_cpu();

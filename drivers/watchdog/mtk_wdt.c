@@ -64,6 +64,8 @@
 #define DRV_NAME		"mtk-wdt"
 #define DRV_VERSION		"1.0"
 
+extern void dbg_scratch_record(unsigned int id, unsigned long pc);
+
 #define MT7988_TOPRGU_SW_RST_NUM	24
 
 static bool nowayout = WATCHDOG_NOWAYOUT;
@@ -402,6 +404,8 @@ static int mtk_wdt_probe(struct platform_device *pdev)
 	const struct mtk_wdt_data *wdt_data;
 	int err, irq;
 
+	dbg_scratch_record(40, (unsigned long)__builtin_return_address(0));
+
 	mtk_wdt = devm_kzalloc(dev, sizeof(*mtk_wdt), GFP_KERNEL);
 	if (!mtk_wdt)
 		return -ENOMEM;
@@ -411,6 +415,8 @@ static int mtk_wdt_probe(struct platform_device *pdev)
 	mtk_wdt->wdt_base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(mtk_wdt->wdt_base))
 		return PTR_ERR(mtk_wdt->wdt_base);
+
+	dbg_scratch_record(41, readl(mtk_wdt->wdt_base + WDT_MODE));
 
 	irq = platform_get_irq_optional(pdev, 0);
 	if (irq > 0) {

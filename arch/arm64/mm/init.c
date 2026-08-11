@@ -6,6 +6,7 @@
  * Copyright (C) 2012 ARM Ltd.
  */
 
+#include <linux/ckptlog.h>
 #include <linux/kernel.h>
 #include <linux/export.h>
 #include <linux/errno.h>
@@ -428,25 +429,43 @@ void __init mem_init(void)
 	}
 }
 
+extern void draw_debug_color_bar(unsigned int color, int vertical_offset);
+
 void free_initmem(void)
 {
 	void *lm_init_begin = lm_alias(__init_begin);
 	void *lm_init_end = lm_alias(__init_end);
+	void *pos;
 
 	WARN_ON(!IS_ALIGNED((unsigned long)lm_init_begin, PAGE_SIZE));
 	WARN_ON(!IS_ALIGNED((unsigned long)lm_init_end, PAGE_SIZE));
 
+	draw_debug_color_bar(0xFF00FF00, 1350); /* Y=1350 GREEN - free_initmem entry */
+	ckpt_checkpoint("free_initmem:enter");
+
 	/* Delete __init region from memblock.reserved. */
 	memblock_free(lm_init_begin, lm_init_end - lm_init_begin);
+	draw_debug_color_bar(0xFFFFFF00, 1400); /* Y=1400 YELLOW - memblock_free done */
+	ckpt_checkpoint("free_initmem:memblock_free");
 
-	free_reserved_area(lm_init_begin, lm_init_end,
-			   POISON_FREE_INITMEM, "unused kernel");
+	draw_debug_color_bar(0xFF00FFFF, 1450); /* Y=1450 CYAN - poison done (skipped) */
+	ckpt_checkpoint("free_initmem:poison");
+
+	for (pos = lm_init_begin; pos < lm_init_end; pos += PAGE_SIZE)
+		free_reserved_page(virt_to_page(pos));
+	draw_debug_color_bar(0xFF0000FF, 1500); /* Y=1500 BLUE - free loop done */
+	ckpt_checkpoint("free_initmem:free_loop");
+
 	/*
 	 * Unmap the __init region but leave the VM area in place. This
 	 * prevents the region from being reused for kernel modules, which
 	 * is not supported by kallsyms.
 	 */
+#if 0
 	vunmap_range((u64)__init_begin, (u64)__init_end);
+#endif
+	draw_debug_color_bar(0xFFFFFFFF, 1550); /* Y=1550 WHITE - free_initmem done */
+	ckpt_checkpoint("free_initmem:exit");
 }
 
 void dump_mem_limit(void)

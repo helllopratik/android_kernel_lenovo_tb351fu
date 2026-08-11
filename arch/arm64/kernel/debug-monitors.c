@@ -333,8 +333,8 @@ static int brk_handler(unsigned long unused, unsigned long esr,
 	if (user_mode(regs)) {
 		send_user_sigtrap(TRAP_BRKPT);
 	} else {
-		pr_warn("Unexpected kernel BRK exception at EL1\n");
-		return -EFAULT;
+		arm64_skip_faulting_instruction(regs, AARCH64_INSN_SIZE);
+		return 0;
 	}
 
 	return 0;

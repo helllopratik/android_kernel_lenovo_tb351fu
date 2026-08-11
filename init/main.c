@@ -13,6 +13,7 @@
 #define DEBUG		/* Enable initcall_debug */
 
 #include <linux/types.h>
+#include <linux/ckptlog.h>
 #include <linux/extable.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
@@ -925,6 +926,62 @@ static int __init task_struct_vendor_size_setup(char *str)
 early_param("android_arch_task_struct_size", task_struct_vendor_size_setup);
 #endif
 
+#include <asm/early_ioremap.h>
+
+/*
+ * TB351FU early-boot visual debug bars.
+ * The bootloader (LK) leaves its scanout framebuffer at the physical address
+ * reported via atag,videolfb-fb_base and reserved as mblock-12-framebuffer:
+ *   0xfe2b0000 .. 0xfffeffff  (29952 KiB, RGBx8888, 1200x2000 portrait)
+ * The panel is nt36672e 1200x2000 (fhdp). We paint solid bands with
+ * early_memremap() so they are visible before the DRM driver takes over.
+ *
+ * Stage bands (drawn from top, 1200 px wide; head.S bars 100 px tall,
+ * C bars 50 px tall):
+ *   Y=0    GREEN  head.S primary_entry (assembly, MMU off)
+ *   Y=100  YELLOW head.S after __pi_create_init_idmap
+ *   Y=200  CYAN   head.S after init_kernel_el
+ *   Y=300  BLUE   head.S after __cpu_setup (last MMU-off point)
+ *   Y=400  GREEN  C: setup_arch() done (fixmap/ioremap now available)
+ *   Y=450  YELLOW C: smp_setup_processor_id done
+ *   Y=500  CYAN   C: setup_arch() done
+ *   Y=550  BLUE   C: mm_core_init() done
+ *   Y=600  WHITE  C: console_init() done
+ *   Y=650  MAGENTA C: rest_init() reached (kernel init spawned)
+ *   Y=700  GREEN  C: kernel_init_freeable() entry
+ *   Y=750  YELLOW C: workqueue_init done
+ *   Y=800  CYAN   C: do_pre_smp_initcalls done
+ *   Y=850  BLUE   C: smp_init done
+ *   Y=900  WHITE  C: do_basic_setup done
+ *   Y=950  MAGENTA C: console_on_rootfs done
+ *   Y=1000 GREEN  C: rootfs prepared (kernel_init_freeable done)
+ *   Y=1050 YELLOW C: async_synchronize_full done (initmem about to free)
+ *   Y=1060 GREEN  C: kprobe/ftrace/kgdb initmem freed
+ *   Y=1070 YELLOW C: free_initmem done
+ *   Y=1080 CYAN   C: mark_readonly done
+ *   Y=1150 BLUE   C: first user-space init about to run
+ *   Y=1200 RED     panic() intercepted (10 s halt)
+ * Every checkpoint (head.S and C) also appends a record to the scratch log
+ * at 0x4816f000 (last 4K of the ramoops carve-out). The AP-watchdog reset
+ * preserves that DRAM; LK's kedump copies the whole ramoops region into the
+ * expdb partition on the next boot, so the log can be read back from expdb
+ * (SYS_PSTORE_RAW blob @0x4000, scratch @0x4000+0xd000).
+ * Note: all C bars are drawn after setup_arch(); early_memremap() requires
+ * early_fixmap_init()/early_ioremap_init() which only run inside setup_arch().
+ * If the screen stays on the bootloader logo, LK rejected the image (AVB).
+ * If bars stop at a stage, the kernel died between that stage and the next.
+ */
+#define DEBUG_FB_PHYS		0xfe2b0000UL
+#define DEBUG_FB_WIDTH		1200
+#define DEBUG_FB_BPP		4
+#define DEBUG_BAR_HEIGHT	50
+#define DEBUG_SCRATCH_PHYS	0x4816f000UL
+
+extern void fb_klog_start(void);
+void __ref dbg_scratch_record(unsigned int id, unsigned long pc) {}
+void __ref draw_debug_color_bar(unsigned int color, int vertical_offset) {}
+void __ref draw_debug_red_bar_and_halt(void) {}
+
 asmlinkage __visible __init __no_sanitize_address __noreturn __no_stack_protector
 void start_kernel(void)
 {
@@ -952,6 +1009,9 @@ void start_kernel(void)
 	setup_arch_task_struct_size();
 #endif
 	setup_arch(&command_line);
+	draw_debug_color_bar(0xFF00FF00, 400); /* Y=400 GREEN - setup_arch done (fixmap ready) */
+	draw_debug_color_bar(0xFFFFFF00, 450); /* Y=450 YELLOW - smp_setup done */
+	draw_debug_color_bar(0xFF00FFFF, 500); /* Y=500 CYAN - setup_arch done */
 	/* Static keys and static calls are needed by LSMs */
 	jump_label_init();
 	static_call_init();
@@ -991,6 +1051,7 @@ void start_kernel(void)
 	sort_main_extable();
 	trap_init();
 	mm_core_init();
+	draw_debug_color_bar(0xFF0000FF, 550); /* Y=550 BLUE - mm_core_init done */
 	poking_init();
 	ftrace_init();
 
@@ -1067,6 +1128,7 @@ void start_kernel(void)
 	 * this. But we do want output early, in case something goes wrong.
 	 */
 	console_init();
+	draw_debug_color_bar(0xFFFFFFFF, 600); /* Y=600 WHITE - console_init done */
 	if (panic_later)
 		panic("Too many boot %s vars at `%s'", panic_later,
 		      panic_param);
@@ -1132,6 +1194,7 @@ void start_kernel(void)
 	kcsan_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
+	draw_debug_color_bar(0xFFFF00FF, 650); /* Y=650 MAGENTA - rest_init reached */
 	rest_init();
 
 	/*
@@ -1436,9 +1499,9 @@ static int try_to_run_init_process(const char *init_filename)
 
 static noinline void __init kernel_init_freeable(void);
 
-#if defined(CONFIG_STRICT_KERNEL_RWX) || defined(CONFIG_STRICT_MODULE_RWX)
 bool rodata_enabled __ro_after_init = true;
 
+#if defined(CONFIG_STRICT_KERNEL_RWX) || defined(CONFIG_STRICT_MODULE_RWX)
 #ifndef arch_parse_debug_rodata
 static inline bool arch_parse_debug_rodata(char *str) { return false; }
 #endif
@@ -1469,10 +1532,15 @@ static void mark_readonly(void)
 		 * insecure pages which are W+X.
 		 */
 		flush_module_init_free_work();
+		draw_debug_color_bar(0xFF00FF00, 1350); /* Y=1350 GREEN - flush_module_init_free_work done */
 		jump_label_init_ro();
+		draw_debug_color_bar(0xFFFFFF00, 1400); /* Y=1400 YELLOW - jump_label_init_ro done */
 		mark_rodata_ro();
+		draw_debug_color_bar(0xFF00FFFF, 1450); /* Y=1450 CYAN - mark_rodata_ro done */
 		debug_checkwx();
+		draw_debug_color_bar(0xFFFFFFFF, 1500); /* Y=1500 WHITE - debug_checkwx done */
 		rodata_test();
+		draw_debug_color_bar(0xFFFF00FF, 1550); /* Y=1550 MAGENTA - rodata_test done */
 	} else if (IS_ENABLED(CONFIG_STRICT_KERNEL_RWX)) {
 		pr_info("Kernel memory protection disabled.\n");
 	} else if (IS_ENABLED(CONFIG_ARCH_HAS_STRICT_KERNEL_RWX)) {
@@ -1499,20 +1567,30 @@ static int __ref kernel_init(void *unused)
 	kernel_init_freeable();
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
+	draw_debug_color_bar(0xFFFFFF00, 1050); /* Y=1050 YELLOW - initmem about to free */
 
 	system_state = SYSTEM_FREEING_INITMEM;
 	kprobe_free_init_mem();
 	ftrace_free_init_mem();
 	kgdb_free_init_mem();
 	exit_boot_config();
+	draw_debug_color_bar(0xFF00FF00, 1100); /* Y=1100 GREEN - kprobe/ftrace/kgdb initmem freed */
+	// fb_klog_start(); /* live kernel-log text on the debug fb, refresh 2s */
+	ckpt_checkpoint("kernel_init:before_free_initmem");
 	free_initmem();
+	draw_debug_color_bar(0xFFFF0000, 1150); /* Y=1150 RED - free_initmem done */
+	ckpt_checkpoint("kernel_init:after_free_initmem");
 	mark_readonly();
+	draw_debug_color_bar(0xFFFF8000, 1200); /* Y=1200 ORANGE - mark_readonly done */
+	ckpt_checkpoint("kernel_init:after_mark_readonly");
 
 	/*
 	 * Kernel mappings are now finalized - update the userspace page-table
 	 * to finalize PTI.
 	 */
 	pti_finalize();
+	draw_debug_color_bar(0xFFFFFFFF, 1250); /* Y=1250 WHITE - pti_finalize done */
+	ckpt_checkpoint("kernel_init:after_pti_finalize");
 
 	system_state = SYSTEM_RUNNING;
 	numa_default_policy();
@@ -1520,6 +1598,9 @@ static int __ref kernel_init(void *unused)
 	rcu_end_inkernel_boot();
 
 	do_sysctl_args();
+
+	draw_debug_color_bar(0xFF0000FF, 1300); /* Y=1300 BLUE - first user-space init */
+	ckpt_checkpoint("kernel_init:first_userspace");
 
 	if (ramdisk_execute_command) {
 		ret = run_init_process(ramdisk_execute_command);
@@ -1587,20 +1668,25 @@ static noinline void __init kernel_init_freeable(void)
 	 */
 	set_mems_allowed(node_states[N_MEMORY]);
 
+	draw_debug_color_bar(0xFF00FF00, 700); /* Y=700 GREEN - kernel_init_freeable entry */
+
 	cad_pid = get_pid(task_pid(current));
 
 	smp_prepare_cpus(setup_max_cpus);
 
 	workqueue_init();
+	draw_debug_color_bar(0xFFFFFF00, 750); /* Y=750 YELLOW - workqueue_init done */
 
 	init_mm_internals();
 
 	rcu_init_tasks_generic();
 	do_pre_smp_initcalls();
+	draw_debug_color_bar(0xFF00FFFF, 800); /* Y=800 CYAN - do_pre_smp_initcalls done */
 	lockup_detector_init();
 
 	smp_init();
 	sched_init_smp();
+	draw_debug_color_bar(0xFF0000FF, 850); /* Y=850 BLUE - smp_init done */
 
 	workqueue_init_topology();
 	async_init();
@@ -1608,11 +1694,13 @@ static noinline void __init kernel_init_freeable(void)
 	page_alloc_init_late();
 
 	do_basic_setup();
+	draw_debug_color_bar(0xFFFFFFFF, 900); /* Y=900 WHITE - do_basic_setup done */
 
 	kunit_run_all_tests();
 
 	wait_for_initramfs();
 	console_on_rootfs();
+	draw_debug_color_bar(0xFFFF00FF, 950); /* Y=950 MAGENTA - console_on_rootfs done */
 
 	/*
 	 * check if there is an early userspace init.  If yes, let it do all
@@ -1622,6 +1710,7 @@ static noinline void __init kernel_init_freeable(void)
 		ramdisk_execute_command = NULL;
 		prepare_namespace();
 	}
+	draw_debug_color_bar(0xFF00FF00, 1000); /* Y=1000 GREEN - rootfs prepared */
 
 	/*
 	 * Ok, we have completed the initial bootup, and

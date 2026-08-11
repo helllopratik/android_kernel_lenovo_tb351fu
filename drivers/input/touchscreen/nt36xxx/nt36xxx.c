@@ -2080,6 +2080,12 @@ static int nvt_ts_check_dt(struct device_node *np)
 		}
 	}
 
+	extern char *saved_command_line;
+	if (saved_command_line && (strstr(saved_command_line, "androidboot.mode=recovery") || strstr(saved_command_line, "recovery"))) {
+		pr_info("[NVT] Recovery mode detected, bypassing DRM panel check\n");
+		return 0;
+	}
+
 	return PTR_ERR(panel);
 }
 #endif

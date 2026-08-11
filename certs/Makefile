@@ -82,7 +82,8 @@ $(obj)/x509_revocation_list: $(CONFIG_SYSTEM_REVOCATION_KEYS) $(obj)/extract-cer
 
 targets += x509_revocation_list
 
-hostprogs := extract-cert
+hostprogs-$(CONFIG_SYSTEM_TRUSTED_KEYRING) += extract-cert
+hostprogs := $(hostprogs-y)
 
 HOSTCFLAGS_extract-cert.o = $(shell $(HOSTPKG_CONFIG) --cflags libcrypto 2> /dev/null) -I$(srctree)/scripts
 HOSTLDLIBS_extract-cert = $(shell $(HOSTPKG_CONFIG) --libs libcrypto 2> /dev/null || echo -lcrypto)
