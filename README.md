@@ -6,7 +6,7 @@
 
 This repository hosts the Linux kernel source tree currently being used for the Lenovo Tab Plus `TB351FU` bring-up work.
 
-It is based on Lenovo's published open-source kernel release and is being reworked for custom development, testing, and Android 16 compatibility work around the `TB351FU` platform. The current focus is practical device bring-up, not a final production-ready Android 16 kernel release.
+It is based on Lenovo's published open-source kernel release and is being reworked for custom development, testing, and Android 17 compatibility work around the `TB351FU` platform. The current focus is practical device bring-up, not a final production-ready Android 17 kernel release.
 
 > [!NOTE]
 > This tree is shared for educational and development use. Credit for the initial platform source belongs to Lenovo and the original upstream Linux / Android kernel contributors whose work this tree builds on.
@@ -14,10 +14,11 @@ It is based on Lenovo's published open-source kernel release and is being rework
 ## Current Status
 
 - Base source: Lenovo open-source release for the `TB351FU` platform
-- Kernel version: `5.10.177`
-- Primary defconfig: `arch/arm64/configs/t808aa_defconfig`
-- Toolchain direction in-tree: Clang / LLVM (`LLVM=1`, `LLVM_IAS=1`)
-- Ongoing work: cleanup, bring-up, and Android 16 compatibility adjustments for the TB351FU custom ROM stack
+- Kernel version: Linux `6.12.15` (Android GKI `6.12` base)
+- Primary defconfig: `arch/arm64/configs/gki_defconfig` (Android GKI)
+- Stock reference config: `arch/arm64/configs/stock_config`
+- Toolchain direction in-tree: Clang / LLVM 19 (`LLVM=1`, `LLVM_IAS=1`)
+- Ongoing work: cleanup, bring-up, and Android 17 compatibility adjustments for the TB351FU custom ROM stack
 
 ## Device Reference
 
@@ -29,9 +30,9 @@ This kernel is paired with the Lenovo Tab Plus `TB351FU` custom ROM effort. The 
 | Board | `t808aa` |
 | Platform family | MediaTek `MT6789` / `MT8781` bring-up target |
 | Architecture | `arm64` primary, `arm` secondary compatibility |
-| Kernel base | Linux `5.10.177` |
+| Kernel base | Linux `6.12.15` (Android GKI `6.12`) |
 | Boot setup | Boot header v4, DTB included in boot image |
-| ROM direction | Android 16 / LineageOS bring-up |
+| ROM direction | Android 17 / Evolution X bring-up |
 | Related hardware features in the public trees | Dolby hooks, Lenovo pen support, virtual A/B, AVB-enabled layout |
 
 ## What Is In This Tree
@@ -39,7 +40,7 @@ This kernel is paired with the Lenovo Tab Plus `TB351FU` custom ROM effort. The 
 - Lenovo-sourced kernel base for the TB351FU platform
 - MediaTek platform support for the active bring-up target
 - OEM-facing drivers and platform-specific integration points used by the stock software base
-- The `t808aa_defconfig` currently referenced by the matching device tree
+- The Android GKI `6.12` base (`gki_defconfig`) and the stock kernel configuration reference (`stock_config`)
 
 ## Build Reference
 
@@ -49,19 +50,26 @@ This tree is not trying to replace the full Android build environment documentat
 export ARCH=arm64
 export SUBARCH=arm64
 
-make O=out LLVM=1 LLVM_IAS=1 t808aa_defconfig
+make O=out LLVM=1 LLVM_IAS=1 gki_defconfig
 make -j"$(nproc)" O=out LLVM=1 LLVM_IAS=1
+```
+
+A GKI-style build via the Android kernel build system is also supported:
+
+```bash
+build/build.sh build.config.gki.aarch64
 ```
 
 If you are building through a full Android tree, use the same kernel path and defconfig that the paired device tree expects:
 
 - `TARGET_KERNEL_SOURCE := kernel/lenovo/TB351FU`
-- `TARGET_KERNEL_CONFIG := t808aa_defconfig`
+- `TARGET_KERNEL_CONFIG := gki_defconfig`
 
 ## Repository Pointers
 
-- [arch/arm64/configs/t808aa_defconfig](arch/arm64/configs/t808aa_defconfig): active defconfig used by the matching device tree
-- [build.config.mtk.aarch64](build.config.mtk.aarch64): Mediatek-oriented build configuration reference
+- [arch/arm64/configs/gki_defconfig](arch/arm64/configs/gki_defconfig): Android GKI `6.12` defconfig used as the build base
+- [arch/arm64/configs/stock_config](arch/arm64/configs/stock_config): stock Lenovo kernel configuration reference
+- [build.config.gki.aarch64](build.config.gki.aarch64): GKI-oriented build configuration reference
 - [android/abi_gki_aarch64_lenovo](android/abi_gki_aarch64_lenovo): ABI symbol list used for Lenovo-oriented GKI module compatibility work
 
 ## Scope And Intent
@@ -69,11 +77,11 @@ If you are building through a full Android tree, use the same kernel path and de
 The goal of this repository is to make the published Lenovo kernel source more useful for community development on the `TB351FU`, especially for:
 
 - recovery bring-up
-- Evolution X / Android 17 experimentation
+- Evolution X / Android 17 bring-up and experimentation
 - debugging boot and hardware initialization issues
 - educational study of the platform kernel layout
 
-This does **not** mean every subsystem is already validated for daily-driver use on Android 16. Expect ongoing changes as bring-up progresses.
+This does **not** mean every subsystem is already validated for daily-driver use on Android 17. Expect ongoing changes as bring-up progresses.
 
 ## Credits
 
