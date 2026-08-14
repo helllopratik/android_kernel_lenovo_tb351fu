@@ -124,7 +124,7 @@ static inline void selinux_mark_initialized(void)
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
 static inline bool enforcing_enabled(void)
 {
-	return false;
+	return READ_ONCE(selinux_state.enforcing);
 }
 
 static inline void enforcing_set(bool value)
