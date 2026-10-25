@@ -174,8 +174,17 @@ extern const uint16_t gesture_key_array[];
 #else /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) */
 #if IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)
 #define NVT_QCOM_PANEL_EVENT_NOTIFY 1
-#elif IS_ENABLED(CONFIG_DRM_MEDIATEK)
-#define NVT_DRM_PANEL_NOTIFY 1
+/*
+ * NOTE for MediaTek (TB351FU / kernel 6.12):
+ * The previous code mapped CONFIG_DRM_MEDIATEK to NVT_DRM_PANEL_NOTIFY,
+ * but that path uses the Qualcomm-only drm_panel_notifier_register() /
+ * struct drm_panel_notifier API, which does not exist in this kernel's
+ * upstream MediaTek DRM driver. The MTK vendor notifier used by
+ * NVT_MTK_DRM_NOTIFY (mtk_disp_notify.h / mtk_panel_ext.h) is absent here
+ * as well. No display-blank notifier is therefore selected; the touch
+ * controller is suspended/resumed through the driver's dev_pm_ops system
+ * suspend callbacks instead.
+ */
 #endif
 #endif
 

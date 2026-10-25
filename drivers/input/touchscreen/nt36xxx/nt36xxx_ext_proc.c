@@ -1312,7 +1312,10 @@ static int32_t nvt_get_fw_pen_state_open(struct inode *inode, struct file *file)
 }
 #ifdef HAVE_PROC_OPS
 static const struct proc_ops nvt_get_fw_pen_state_fops = {
-	.proc_open = nvt_get_fw_pen_state_open,
+	.proc_open    = nvt_get_fw_pen_state_open,
+	.proc_read    = seq_read,
+	.proc_lseek   = seq_lseek,
+	.proc_release = single_release,
 };
 #else
 static const struct file_operations nvt_get_fw_pen_state_fops = {

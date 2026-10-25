@@ -193,10 +193,15 @@ const struct mt_chip_conf spi_ctrdata = {
 #endif
 
 #ifdef CONFIG_SPI_MT65XX
+/*
+ * mtk_chip_config only exposes {sample_sel, tick_delay} since kernel 6.12;
+ * the older rx_mlsb/tx_mlsb/cs_pol fields were removed. LSB-first is now
+ * configured through the SPI_LSB_FIRST mode bit in nvt_ts_probe(), and the
+ * chip select polarity is active-low by default, so no fields are required.
+ */
 const struct mtk_chip_config spi_ctrdata = {
-    .rx_mlsb = 1,
-    .tx_mlsb = 1,
-    .cs_pol = 0,
+	.sample_sel = 0,
+	.tick_delay = 0,
 };
 #endif
 
@@ -1878,7 +1883,6 @@ if (nvt_check_stylus_state(input_id, point_data)) {
 				if(LENOVO_MAX_BUFFER == pen_buffer_wp) {
 					pen_buffer_wp = 0;
 				}
-
 			} else if (pen_format_id == 0xF0) {
 				// report Pen ID
 			} else {
@@ -2328,6 +2332,11 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	}
 	ts->client->bits_per_word = 8;
 	ts->client->mode = SPI_MODE_0;
+#ifdef CONFIG_SPI_MT65XX
+	/* Upstream spi-mt65xx drives LSB-first via the SPI_LSB_FIRST mode bit
+	 * (rx_mlsb/tx_mlsb were removed from mtk_chip_config in 6.12). */
+	ts->client->mode |= SPI_LSB_FIRST;
+#endif
 	ts->client->controller_data = (void *)&nvt_spidata;
 
 	ret = spi_setup(ts->client);
@@ -3307,6 +3316,12 @@ static int nvt_mtk_drm_notifier_callback(struct notifier_block *nb,
 #if NVT_PM_WAIT_BUS_RESUME_COMPLETE
 static int nvt_ts_pm_suspend(struct device *dev)
 {
+	/*
+	 * No display-blank notifier is available on this kernel
+	 * (see the note in nt36xxx.h), so the system suspend/resume
+	 * callbacks put the touch controller to sleep and wake it up.
+	 */
+	nvt_ts_suspend(dev);
 	ts->dev_pm_suspend = true;
 	reinit_completion(&ts->dev_pm_resume_completion);
 
@@ -3315,6 +3330,7 @@ static int nvt_ts_pm_suspend(struct device *dev)
 
 static int nvt_ts_pm_resume(struct device *dev)
 {
+	nvt_ts_resume(dev);
 	ts->dev_pm_suspend = false;
 	complete(&ts->dev_pm_resume_completion);
 
